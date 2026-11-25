@@ -139,7 +139,14 @@ const bar = (v) => `<span class="bar ${barCls(v)}"><i style="width:${Math.min(10
 const typeName = (t) => ((S.inv.types || {})[t] || {}).name || t;
 const iconSrc = (f) => (!f ? "" : f.startsWith("/") ? f : `icons/${f}`);
 const logoImg = (f, cls = "lg", alt = "") => (f ? `<img class="${cls}" src="${esc(iconSrc(f))}" alt="${esc(alt)}" loading="lazy">` : "");
-const docLink = (p, label = "Docs") => (p ? `<a href="${/^https?:/.test(p) ? esc(p) : DOCS + esc(p)}" target="_blank" rel="noopener">${label}${icon("external", "xs")}</a>` : "");
+const docLink = (p, label = "Docs") => {
+  if (!p) return "";
+  if (!/^https?:/.test(p) && (ICC().docs || {}).integrated) { // MkDocs-style "section/page/#anchor" -> integrated docs page
+    const [path, a] = p.split("#");
+    return `<a href="#/docs?p=${encodeURIComponent(path.replace(/^\/+/, "")).replace(/%2F/g, "/")}${a ? `&a=${encodeURIComponent(a)}` : ""}">${label}</a>`;
+  }
+  return `<a href="${/^https?:/.test(p) ? esc(p) : DOCS + esc(p)}" target="_blank" rel="noopener">${label}${icon("external", "xs")}</a>`;
+};
 
 /* ---------------- data ---------------- */
 async function promq(expr) {

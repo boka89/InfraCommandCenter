@@ -114,7 +114,9 @@ monitoring:
     host: ""
     storage: 5Gi
     timezone: ""          # TZ of the container, e.g. Europe/Vienna
-    adminSecret: ""       # Secret with GF_SECURITY_ADMIN_USER / GF_SECURITY_ADMIN_PASSWORD; generated when empty
+    # Secret with GF_SECURITY_ADMIN_USER / GF_SECURITY_ADMIN_PASSWORD. Generated when empty, which only works with
+    # `helm install/upgrade` (lookup keeps it stable); with Argo CD / Flux set an existing Secret here.
+    adminSecret: ""
     datasourceUid: victoria-metrics
     # LDAP / Active Directory sign-in: a ConfigMap with ldap.toml (+ CA files, mounted at /etc/grafana/ldap)
     ldap:
