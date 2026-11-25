@@ -71,7 +71,7 @@ function alertLevel(a) {
 }
 const levelOf = (al) => al.reduce((m, a) => Math.max(m, alertLevel(a)), 0);
 const incidents = (al) => al.filter((a) => alertLevel(a) > 0);
-const lvlChip = (l, label = INC[l]) => l > 0 ? `<span class="lvl l${l}" title="${INC[l]}"><i>${PNAME[l]}</i>${label ? esc(label.replace(/^P\d · /, "")) : ""}</span>` : (label ? `<span class="lvl l0" title="No incident">${esc(label)}</span>` : "");
+const lvlChip = (l, label = l > 0 ? INC[l] : "All OK") => l > 0 ? `<span class="lvl l${l}" title="${INC[l]}"><i>${PNAME[l]}</i>${label ? esc(label.replace(/^P\d · /, "")) : ""}</span>` : (label ? `<span class="lvl l0" title="No incident">${esc(label)}</span>` : "");
 
 /* user settings (sidebar → user → Settings): theme + time zone */
 S_TZ = localStorage.getItem("tz") || Intl.DateTimeFormat().resolvedOptions().timeZone;
