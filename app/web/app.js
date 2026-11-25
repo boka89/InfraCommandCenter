@@ -204,7 +204,11 @@ const byNode = (key, n) => mv(key, (m) => m.node === n);
 /* links in changelog/planner Markdown: relative ones point into the docs site (if any) or the config repo */
 function relLink(href, base = "planner.md") {
   if (/^[a-z]+:/i.test(href) || href.startsWith("#")) return href;
-  const R = ICC().repo || {}, f = repoFile(base).path || "";
+  const R = ICC().repo || {}, f = repoFile(base).path || "", Dd = ICC().docs || {};
+  if (Dd.integrated && Dd.path) { // a page of the integrated docs -> open it inside ICC
+    const u = new URL(href, `https://x/${f.includes("/") ? f.slice(0, f.lastIndexOf("/") + 1) : ""}`), rp = decodeURIComponent(u.pathname.slice(1));
+    if (rp.startsWith(Dd.path + "/") && /\.md$/.test(rp)) return `#/docs?p=${encodeURIComponent(rp.slice(Dd.path.length + 1)).replace(/%2F/g, "/")}${u.hash ? `&a=${encodeURIComponent(u.hash.slice(1))}` : ""}`;
+  }
   if (R.web) { const u = new URL(href, `https://x/${f.includes("/") ? f.slice(0, f.lastIndexOf("/") + 1) : ""}`); return `${R.web}/blob/${R.branch}${u.pathname}${u.hash}`; }
   if (DOCS) return DOCS + href.replace(/^\.?\//, "").replace(/\.md(#|$)/, "/$1");
   return "#";
@@ -760,6 +764,7 @@ function render(keepFocus = false) {
   const al = alerts();
   { const lv = levelOf(al); $("#health-mini").innerHTML = `<button class="ghost health-btn" id="attn" title="Show alarms">${lvlChip(lv, "")}<span>${al.length ? `${al.length} alarm${al.length === 1 ? "" : "s"} · ${LVL[lv]}` : "No alarms"}</span><span class="sp"></span>${icon("bell")}</button>`; }
   $("#updated").textContent = S.updated ? `Updated ${fmtTime(S.updated)}${S.m.failed ? ` · ${S.m.failed} queries failed` : ""}` : "";
+  if (r.name === "docs" && window.ICCDocs) window.ICCDocs.afterRender();
 }
 document.addEventListener("click", (e) => {
   if (e.target.closest("select, input")) return; // form controls are handled by change/input
@@ -803,7 +808,7 @@ async function boot() {
   render();
   await Promise.allSettled([loadMetrics(), loadDocs()]);
   render();
-  setInterval(async () => { await loadMetrics(); if (document.activeElement?.id !== "q" && current !== "monitoring") render(); }, 30000);
+  setInterval(async () => { await loadMetrics(); if (document.activeElement?.id !== "q" && !["monitoring", "docs"].includes(current)) render(); }, 30000);
   setInterval(async () => { await loadDocs(); }, 10 * 60000);
 }
 boot();

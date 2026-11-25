@@ -13,12 +13,13 @@
 - **Monitor**: live health from probes and metrics (Proxmox, Kubernetes, ArgoCD, Longhorn, Windows), embedded Grafana dashboards and alarms. Every alarm has a **Check & fix** button that hands it to the AI.
 - **Planner**: a task board stored as Markdown in Git, with **Execute with Hermes** on every task.
 - **Changelog**: what changed and when, plus an admin activity log of who changed, ran or signed in to what.
+- **Docs**: your documentation as Markdown in the same Git repository: page tree, full-text search, Mermaid diagrams, edit in place (every save is a commit).
 - **AI chat**: Hermes Agent with folders/projects and per-folder instructions. It changes configuration through Git commits under your name.
 
 ## Design principles
 
 - **Git is the database.** All configuration (inventory, sites, planner, changelog, per-user settings) is plain YAML/Markdown in *your* repository. Every edit is a commit, so history, review and rollback come for free. No SQL database.
-- **Light.** One small container (nginx + a single-file Python API, about 60 MB) plus optional VictoriaMetrics and the blackbox exporter.
+- **Light.** One small container (nginx + a small Python API) plus optional VictoriaMetrics, the blackbox exporter and Grafana.
 - **Bring your own.** Your Git server, monitoring (any Prometheus-compatible API), identity (local, LDAP/AD or OIDC), vault and AI agent. If you don't have something, ICC can deploy it.
 - **AI-first.** The UI is for seeing and deciding; the AI operator does the work through the same Git repository, with full access by default.
 - **One ICC per business.** There is no multi-tenancy.

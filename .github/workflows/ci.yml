@@ -18,9 +18,9 @@ jobs:
         with: {node-version: "22"}
       - uses: azure/setup-helm@v4
       - name: Python dependencies
-        run: pip install pyyaml==6.0.2 ldap3==2.9.1
+        run: pip install pyyaml==6.0.2 ldap3==2.9.1 markdown==3.11.3 pymdown-extensions==13.1.2
       - name: Python syntax
-        run: python -m py_compile app/api/icc_api.py docker/render_nginx.py tests/*.py
+        run: python -m py_compile app/api/icc_api.py app/api/icc_docs.py docker/render_nginx.py tests/*.py
       - name: JavaScript syntax
         run: for f in app/web/*.js; do node --check "$f"; done
       - name: API smoke test (local sign-in, OIDC with a mock IdP, planner, settings, activity)
@@ -45,3 +45,6 @@ jobs:
           helm template t charts/infra-command-center > /dev/null
           helm template t charts/infra-command-center --set ingress.enabled=true --set ai.deploy.enabled=true \
             --set vaultwarden.enabled=true --set "auth.providers={local,ldap,oidc}" --set auth.oidc.existingSecret=o > /dev/null
+          helm template t charts/infra-command-center --set ingress.enabled=true --set ingress.host=icc.example.com \
+            --set monitoring.grafana.enabled=true --set "monitoring.grafana.dashboards.gnetIds={1860}" \
+            --set monitoring.victoriametrics.kubernetes.enabled=true | grep -q 'GF_SERVER_ROOT_URL, value: "https://icc.example.com/grafana/"'

@@ -16,15 +16,35 @@ spec:
     - host: {{ .Values.ingress.host | quote }}
       http:
         paths:
+          {{- $g := .Values.monitoring.grafana }}
+          {{- if and $g.enabled (not $g.host) $g.path }}
+          - path: {{ $g.path | trimSuffix "/" }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $full }}-grafana
+                port: {name: http}
+          {{- end }}
           - path: /
             pathType: Prefix
             backend:
               service:
                 name: {{ $full }}
                 port: {name: http}
+    {{- if and .Values.monitoring.grafana.enabled .Values.monitoring.grafana.host }}
+    - host: {{ .Values.monitoring.grafana.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $full }}-grafana
+                port: {name: http}
+    {{- end }}
   {{- if .Values.ingress.tlsSecretName }}
   tls:
-    - hosts: [{{ .Values.ingress.host | quote }}]
+    - hosts: [{{ .Values.ingress.host | quote }}{{ if and .Values.monitoring.grafana.enabled .Values.monitoring.grafana.host }}, {{ .Values.monitoring.grafana.host | quote }}{{ end }}]
       secretName: {{ .Values.ingress.tlsSecretName }}
   {{- end }}
 {{- if and .Values.ingress.certManagerIssuer .Values.ingress.tlsSecretName }}
@@ -37,6 +57,6 @@ metadata:
 spec:
   secretName: {{ .Values.ingress.tlsSecretName }}
   issuerRef: {name: {{ .Values.ingress.certManagerIssuer }}, kind: ClusterIssuer}
-  dnsNames: [{{ .Values.ingress.host | quote }}]
+  dnsNames: [{{ .Values.ingress.host | quote }}{{ if and .Values.monitoring.grafana.enabled .Values.monitoring.grafana.host }}, {{ .Values.monitoring.grafana.host | quote }}{{ end }}]
 {{- end }}
 {{- end }}

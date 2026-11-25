@@ -47,8 +47,9 @@ See [auth.md](auth.md): `ICC_AUTH_PROVIDERS`, `ICC_ADMIN_*`, `ICC_USERS_FILE`, `
 | `ICC_NOTIFY_URL`, `ICC_NOTIFY_SECRET` | Optional Hermes webhook route (HMAC) for "task started / finished" notices to chat platforms |
 | `ICC_METRICS_URL` | Prometheus-compatible query API (VictoriaMetrics, Prometheus, Mimir, Thanos) |
 | `ICC_METRICS_AUTH_HEADER` | Optional `Authorization` header value for the metrics backend |
-| `ICC_GRAFANA_URL` | Grafana origin allowed in the CSP `frame-src`, so public dashboards can be embedded |
-| `ICC_DOCS_URL` | MkDocs site whose `search/search_index.json` is searched on the Docs page |
+| `ICC_GRAFANA_URL` | Grafana URL (bundled: `<public url>/grafana`); its origin is allowed in the CSP `frame-src`, so public dashboards can be embedded |
+| `ICC_DOCS_DIR` | Repo-relative folder of the integrated docs (default `<config path>/docs`) |
+| `ICC_DOCS_URL` | Legacy: external MkDocs site whose `search/search_index.json` is searched when the repo has no docs folder |
 
 ## The configuration repository
 
@@ -60,7 +61,17 @@ planner.md        tasks by area (## headings), Markdown task list with tags
 changelog.md      one line per change, newest first
 settings/users/<login>.yaml    written by ICC (theme, time zone)
 settings/hermes/<login>.yaml   written by ICC (chat folders + instructions)
+docs/             integrated documentation: Markdown pages, optional nav.yml, assets/ (icons, images, docs.css)
 ```
+
+**docs/**: every `*.md` is a page (front matter `title:` optional), searchable and editable on the Docs page; saving
+commits to Git as the signed-in user. `nav.yml` orders the page tree (MkDocs `nav:` syntax); without it the tree
+follows the folders. Supported: tables, admonitions (`!!! note`), collapsible blocks (`??? note`), tabs (`=== "Tab"`),
+task lists, footnotes, definition lists, attribute lists, Markdown inside HTML, ```` ```mermaid ```` diagrams and icon
+shortcodes like `:material-server:` (SVG in `docs/assets/icons/material-server.svg`). `docs/assets/docs.css` is loaded
+for page-specific styles. Relative `.md` links open inside ICC; links from the changelog and planner to pages in
+`docs/` do too. Coming from MkDocs: copy `docs/`, convert `nav:` to `nav.yml` and copy the icon SVGs you use from
+`material/templates/.icons/` — that is all.
 
 The files in [`example/config/`](../example/config) document every field in comments. Short reference:
 

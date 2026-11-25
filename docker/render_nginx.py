@@ -150,7 +150,7 @@ http {{
             proxy_buffering off;
             proxy_cache off;
             proxy_read_timeout 1h;
-            client_max_body_size 64k;
+            client_max_body_size 2100k;   # docs pages; the API limits every other endpoint to 64 KiB
             add_header Cache-Control "no-store" always;
         }}
     }}

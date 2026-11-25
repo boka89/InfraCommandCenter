@@ -42,6 +42,34 @@ Your blackbox exporter needs modules named `http`, `tcp` and `icmp` (see `deploy
 
 Link inventory nodes to series with `pve:`, `k8s:` and `win:`. Series with a `site` label are attributed to that site. Cluster-wide series without one go to `kubernetes.site` in `icc.yaml`.
 
+## Kubernetes scraping
+
+`monitoring.victoriametrics.kubernetes.enabled: true` gives the bundled VictoriaMetrics a ServiceAccount with
+cluster-wide read access to nodes, pods, endpoints and services, and adds the `kubelet` and `cadvisor` jobs. Use
+`kubernetes_sd_configs` in `extraScrapeConfigs` for everything else (node-exporter, kube-state-metrics, CoreDNS,
+Traefik, ...). `relabelConfig` (global relabeling, e.g. a `site` label), `externalLabels`, `scrapeInterval` and
+`extraArgs` tune the rest.
+
 ## Grafana
 
-Optional. Under `grafana:` in `inventory.yaml`, list public (login-free) dashboards per site to embed them on Monitor › Dashboards, other dashboards to link, and per-node deep links (`nodeLinks`). Set `ICC_GRAFANA_URL` so the CSP allows the iframe.
+**Bundled**: `monitoring.grafana.enabled: true` deploys Grafana under the ICC host at `/grafana` (same origin, so
+public dashboards embed without extra CSP), with the metrics backend as the default datasource (uid
+`victoria-metrics`). Dashboards come from ConfigMaps (`dashboards.configMaps`, keys `<folder>--<name>.json`) and
+grafana.com ids (`dashboards.gnetIds`, `${DS_*}` inputs bound to the datasource). LDAP/AD sign-in: a ConfigMap with
+`ldap.toml` (+ CA files) in `ldap.existingConfigMap` and the bind password in `ldap.bindPasswordSecret`. Set `host`
+to serve Grafana on its own hostname instead. Moving an existing Grafana: copy its `grafana.db` onto the new volume
+(users, folders, public dashboards and API keys come along).
+
+**Bring your own**: set `monitoring.grafanaUrl` (`ICC_GRAFANA_URL`) so the CSP allows the iframe.
+
+Either way, under `grafana:` in `inventory.yaml`, list public (login-free) dashboards per site to embed them on
+Monitor › Dashboards, other dashboards to link, and per-node deep links (`nodeLinks`).
+
+## Moving history from another VictoriaMetrics / Prometheus
+
+```sh
+kubectl -n icc run vmctl --rm -it --restart=Never --image=victoriametrics/vmctl:v1.156.0 -- \
+  vm-native --vm-native-src-addr=http://old-victoriametrics.monitoring:8428 \
+            --vm-native-dst-addr=http://icc-vm:8428 --vm-native-filter-match='{__name__!=""}' \
+            --vm-native-filter-time-start=2000-01-01T00:00:00Z --disable-progress-bar -s
+```

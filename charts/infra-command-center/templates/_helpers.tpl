@@ -31,3 +31,16 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- define "icc.hermesSecret" -}}
 {{- .Values.ai.existingSecret | default (printf "%s-hermes" (include "icc.fullname" .)) -}}
 {{- end }}
+
+{{/* Grafana URL ICC embeds/links: BYO first, else the bundled Grafana */}}
+{{- define "icc.grafanaUrl" -}}
+{{- $g := .Values.monitoring.grafana -}}
+{{- if .Values.monitoring.grafanaUrl -}}{{ .Values.monitoring.grafanaUrl }}
+{{- else if and $g.enabled $g.host -}}https://{{ $g.host }}
+{{- else if $g.enabled -}}{{ include "icc.publicUrl" . }}{{ $g.path | trimSuffix "/" }}
+{{- end -}}
+{{- end }}
+
+{{- define "icc.publicUrl" -}}
+{{- if .Values.publicUrl -}}{{ .Values.publicUrl | trimSuffix "/" }}{{- else if .Values.ingress.enabled -}}https://{{ .Values.ingress.host }}{{- end -}}
+{{- end }}

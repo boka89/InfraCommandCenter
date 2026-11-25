@@ -1,0 +1,174 @@
+{{- $g := .Values.monitoring.grafana -}}
+{{- if $g.enabled }}
+{{- $full := include "icc.fullname" . -}}
+{{- $root := ternary (printf "https://%s/" $g.host) (printf "%s%s/" (include "icc.publicUrl" .) ($g.path | trimSuffix "/")) (not (empty $g.host)) -}}
+{{- $ds := include "icc.metricsUrl" . -}}
+{{- $adm := $g.adminSecret | default (printf "%s-grafana-admin" $full) -}}
+# Grafana bundled with ICC: datasource = the metrics backend ICC uses, dashboards from ConfigMaps / grafana.com.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $full }}-grafana
+  labels: {{- include "icc.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources: {requests: {storage: {{ $g.storage }}}}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $full }}-grafana
+  labels: {{- include "icc.labels" . | nindent 4 }}
+data:
+  datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: VictoriaMetrics
+        type: prometheus
+        access: proxy
+        uid: {{ $g.datasourceUid }}
+        url: {{ $ds }}
+        isDefault: true
+        editable: true
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: icc
+        type: file
+        allowUiUpdates: false
+        options:
+          path: /var/lib/grafana/dashboards
+          foldersFromFilesStructure: true
+{{- if not $g.adminSecret }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $adm }}
+  labels: {{- include "icc.labels" . | nindent 4 }}
+  annotations: {helm.sh/resource-policy: keep}
+type: Opaque
+{{- $old := lookup "v1" "Secret" .Release.Namespace $adm }}
+data:
+  GF_SECURITY_ADMIN_USER: {{ "admin" | b64enc }}
+  {{- if and $old $old.data }}
+  GF_SECURITY_ADMIN_PASSWORD: {{ index $old.data "GF_SECURITY_ADMIN_PASSWORD" }}
+  {{- else }}
+  GF_SECURITY_ADMIN_PASSWORD: {{ randAlphaNum 24 | b64enc }}
+  {{- end }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $full }}-grafana
+  labels: {{- include "icc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: grafana}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: grafana}
+      annotations:
+        checksum/config: {{ toJson $g | sha256sum }}
+    spec:
+      enableServiceLinks: false
+      securityContext: {runAsUser: 472, runAsGroup: 472, fsGroup: 472}
+      initContainers:
+        - name: dashboards
+          image: curlimages/curl:8.23.0
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              D=/var/lib/grafana/dashboards
+              rm -rf "$D" && mkdir -p "$D" /tmp/dl
+              for f in /cm/*/*--*.json; do
+                [ -e "$f" ] || continue
+                b=$(basename "$f"); folder=$(echo "${b%%--*}" | tr a-z A-Z)
+                mkdir -p "$D/$folder" && cp "$f" "$D/$folder/${b#*--}"
+              done
+              {{- if $g.dashboards.gnetIds }}
+              mkdir -p "$D/{{ $g.dashboards.gnetFolder }}"
+              {{- range $g.dashboards.gnetIds }}
+              curl -fsSL --retry 3 "https://grafana.com/api/dashboards/{{ . }}/revisions/latest/download" -o /tmp/dl/{{ . }}.json || echo "WARN: dashboard {{ . }} not downloaded"
+              {{- end }}
+              for f in /tmp/dl/*.json; do
+                [ -e "$f" ] || continue
+                sed -e 's/\${DS_[A-Za-z0-9_]*}/{{ $g.datasourceUid }}/g' -e 's/"\$ds"/"{{ $g.datasourceUid }}"/g' "$f" > "$D/{{ $g.dashboards.gnetFolder }}/$(basename "$f")"
+              done
+              {{- end }}
+              find "$D" -name '*.json' | sort
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/grafana}
+            {{- range $i, $cm := $g.dashboards.configMaps }}
+            - {name: dash-{{ $i }}, mountPath: /cm/{{ $i }}}
+            {{- end }}
+      containers:
+        - name: grafana
+          image: {{ $g.image }}
+          env:
+            - {name: GF_PATHS_PROVISIONING, value: /etc/grafana/provisioning}
+            - {name: GF_SERVER_ROOT_URL, value: {{ $root | quote }}}
+            {{- if not $g.host }}
+            - {name: GF_SERVER_SERVE_FROM_SUB_PATH, value: "true"}
+            {{- end }}
+            - {name: GF_SECURITY_ALLOW_EMBEDDING, value: "true"}
+            - {name: GF_ANALYTICS_REPORTING_ENABLED, value: "false"}
+            {{- with $g.timezone }}
+            - {name: TZ, value: {{ . | quote }}}
+            {{- end }}
+            {{- if $g.ldap.existingConfigMap }}
+            - {name: GF_AUTH_LDAP_ENABLED, value: "true"}
+            - {name: GF_AUTH_LDAP_CONFIG_FILE, value: /etc/grafana/ldap/ldap.toml}
+            - {name: GF_AUTH_LDAP_ALLOW_SIGN_UP, value: {{ $g.ldap.allowSignUp | quote }}}
+            {{- if $g.ldap.bindPasswordSecret.name }}
+            - name: LDAP_BIND_PASSWORD
+              valueFrom: {secretKeyRef: {name: {{ $g.ldap.bindPasswordSecret.name }}, key: {{ $g.ldap.bindPasswordSecret.key }}}}
+            {{- end }}
+            {{- end }}
+            {{- with $g.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          envFrom:
+            - secretRef: {name: {{ $adm }}}
+          ports: [{name: http, containerPort: 3000}]
+          readinessProbe: {httpGet: {path: /api/health, port: http}, initialDelaySeconds: 10, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /api/health, port: http}, initialDelaySeconds: 60, periodSeconds: 30}
+          resources: {{- toYaml $g.resources | nindent 12 }}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/grafana}
+            - {name: provisioning, mountPath: /etc/grafana/provisioning/datasources/datasource.yaml, subPath: datasource.yaml}
+            - {name: provisioning, mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml, subPath: dashboards.yaml}
+            {{- if $g.ldap.existingConfigMap }}
+            - {name: ldap, mountPath: /etc/grafana/ldap, readOnly: true}
+            {{- end }}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: {{ $full }}-grafana}
+        - name: provisioning
+          configMap: {name: {{ $full }}-grafana}
+        {{- if $g.ldap.existingConfigMap }}
+        - name: ldap
+          configMap: {name: {{ $g.ldap.existingConfigMap }}}
+        {{- end }}
+        {{- range $i, $cm := $g.dashboards.configMaps }}
+        - name: dash-{{ $i }}
+          configMap: {name: {{ $cm }}}
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $full }}-grafana
+  labels: {{- include "icc.labels" . | nindent 4 }}
+spec:
+  selector: {app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: grafana}
+  ports: [{name: http, port: 3000, targetPort: http}]
+{{- end }}

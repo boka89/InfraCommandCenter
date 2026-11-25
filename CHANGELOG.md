@@ -2,6 +2,15 @@
 
 All notable changes to ICC. The format follows [Keep a Changelog](https://keepachangelog.com/) and versions follow [SemVer](https://semver.org/) (pre-1.0: minor versions may break).
 
+## [Unreleased]
+
+### Added
+- Integrated docs: Markdown pages in the config repo (`docs/`), page tree (`nav.yml`), full-text search, Mermaid diagrams, admonitions/tabs/task lists, icon shortcodes, per-instance `docs.css`; edit and create pages in the browser (each save is a commit, stale edits are refused).
+- Helm: bundled Grafana (`monitoring.grafana`) under `/grafana` on the ICC host, datasource = metrics backend, dashboards from ConfigMaps and grafana.com, LDAP/AD config; VictoriaMetrics Kubernetes discovery (`kubernetes.enabled`: RBAC + kubelet/cAdvisor jobs), global `relabelConfig`, `externalLabels`, `scrapeInterval`, `extraArgs`.
+
+### Fixed
+- Kubernetes service links (`ICC_PORT=tcp://…` from a Service named `icc`) no longer break the nginx render.
+
 ## [0.1.0-alpha] — 2026-11-25
 
 First public alpha, extracted from a production home-lab portal.

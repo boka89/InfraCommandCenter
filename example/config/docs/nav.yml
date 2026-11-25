@@ -1,0 +1,7 @@
+# Optional: page order and titles (MkDocs-style). Without this file the tree follows the folders.
+- Home: index.md
+- Network: network.md
+- Runbooks:
+    - runbooks/index.md
+    - Restore a VM from backup: runbooks/restore-vm.md
+    - Rotate the Wi-Fi password: runbooks/wifi-password.md

@@ -19,6 +19,8 @@ from urllib.parse import parse_qs, urlparse
 
 import yaml
 
+import icc_docs
+
 VERSION = os.environ.get("ICC_VERSION", "0.1.0-alpha")
 E = os.environ.get
 
@@ -77,7 +79,9 @@ AUTO_APPROVE = flag("ICC_HERMES_AUTO_APPROVE", True)
 NOTIFY_URL = E("ICC_NOTIFY_URL", "")                  # Hermes webhook route (deliver-only), HMAC signed
 NOTIFY_SECRET = E("ICC_NOTIFY_SECRET", "")
 METRICS_URL = E("ICC_METRICS_URL", "")                # only reported as a feature flag; nginx does the proxying
-DOCS_URL = E("ICC_DOCS_URL", "").rstrip("/")
+DOCS_URL = E("ICC_DOCS_URL", "").rstrip("/")           # optional external MkDocs site (legacy search)
+DOCS_DIR = E("ICC_DOCS_DIR", "").strip("/")            # integrated docs: Markdown in the config repo (default <config path>/docs)
+GRAFANA_URL = E("ICC_GRAFANA_URL", "").rstrip("/")
 
 REPO_DIR = os.path.join(DATA, "repo")
 KEY_FILE = os.path.join(DATA, ".git_key")
@@ -126,6 +130,21 @@ def resolve_link(href, rel_to):
 
 def fp(name):
     return os.path.join(REPO_DIR, rp(name))
+
+
+def docs():
+    return icc_docs.Docs(REPO_DIR, DOCS_DIR or rp("docs"))
+
+
+def docs_head():
+    return _git("log", "-1", "--format=%H", "--", docs().rel, check=False).strip() or "none"
+
+
+def sanitize_html(h):
+    """docs come from Git (trusted authors), still drop active content; the CSP blocks inline scripts anyway"""
+    h = re.sub(r"<(script|iframe|object|embed)\b.*?</\1\s*>|<(script|iframe|object|embed)\b[^>]*>", "", h, flags=re.S | re.I)
+    h = re.sub(r"<[a-zA-Z][^>]*>", lambda m: re.sub(r"\son[a-z]+\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)", "", m.group(0), flags=re.I), h)
+    return re.sub(r"(href|src)\s*=\s*([\"'])\s*javascript:[^\"']*\2", r'\1="#"', h, flags=re.I)
 
 
 def git_web():
@@ -468,8 +487,10 @@ def inventory():
         "links": cfg.get("links") or {},
         "kubernetes": cfg.get("kubernetes") or {},
         "capacity": cfg.get("capacity") or {},
-        "docs": {"url": DOCS_URL or (cfg.get("links") or {}).get("docs", ""), "sections": (cfg.get("docs") or {}).get("sections") or []},
-        "features": {"metrics": bool(METRICS_URL), "hermes": bool(HERMES), "docsSearch": bool(DOCS_URL), "auth": PROVIDERS},
+        "docs": {"url": DOCS_URL or (cfg.get("links") or {}).get("docs", ""), "sections": (cfg.get("docs") or {}).get("sections") or [],
+                 "integrated": docs().enabled(), "path": docs().rel, "url_web": web_url(docs().rel, tree=True)},
+        "grafana": GRAFANA_URL or (cfg.get("links") or {}).get("grafana", ""),
+        "features": {"metrics": bool(METRICS_URL), "hermes": bool(HERMES), "docsSearch": bool(DOCS_URL), "docs": docs().enabled(), "auth": PROVIDERS},
         "repo": {"web": git_web(), "branch": BRANCH, "path": CPATH, "remote": bool(REPO),
                  "files": {n: {"path": rp(n), "url": web_url(rp(n))} for n in ("icc.yaml", "inventory.yaml", "structure.yaml", "planner.md", "changelog.md")},
                  "settings": rp("settings")},
@@ -671,6 +692,7 @@ def config_files():
             ("Inventory", rp("inventory.yaml"), "Hosts, VMs, devices, services, probes, Grafana links"),
             ("Planner", rp("planner.md"), "Tasks (editable in the Planner)"),
             ("Changelog", rp("changelog.md"), "Infrastructure changes, newest first"),
+            ("Docs", DOCS_DIR or rp("docs"), "Documentation pages (Markdown, shown on the Docs page)"),
             ("User settings", rp("settings/users"), "Per-user settings (theme, time zone)"),
             ("Hermes folders", rp("settings/hermes"), "Per-user chat folders/projects and their instructions")]
     for x in icc_cfg().get("configFiles") or []:  # extra repo paths to show (e.g. Helm values of the platform)
@@ -1182,9 +1204,9 @@ class H(BaseHTTPRequestHandler):
     def redirect(self, url, cookie=None):
         return self.send(302, None, {"Location": url, **({"Set-Cookie": cookie} if cookie else {})})
 
-    def body(self):
+    def body(self, limit=65536):
         n = int(self.headers.get("Content-Length") or 0)
-        if n > 65536:
+        if n > limit:
             raise ValueError("too large")
         return json.loads(self.rfile.read(n) or b"{}") if n else {}
 
@@ -1313,6 +1335,8 @@ class H(BaseHTTPRequestHandler):
                 auth = [{"type": "auth", "t": a["t"], "ev": a["ev"], "name": a.get("name") or a["login"], "login": a["login"], "ip": a.get("ip", ""),
                          "why": a.get("why", ""), "via": "portal"} for a in read_audit()]
                 return self.send(200, {"changes": changes, "runs": runs, "auth": auth, "repo": git_web(), "authSince": auth[0]["t"] if auth else None})
+            if p.startswith("/papi/docs/"):
+                return self.docs_get(p, qs, s)
             if p == "/papi/prefs":
                 with git_lock:
                     repo_sync()
@@ -1389,6 +1413,85 @@ class H(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             return
 
+    def docs_get(self, p, qs, s):
+        d = docs()
+        arg = lambda k: (qs.get(k) or [""])[0]  # noqa: E731
+        with git_lock:
+            repo_sync()
+            if not d.enabled():
+                return self.send(404, {"error": f"No docs: create {d.rel}/ in the config repository" + ("" if icc_docs.markdown else " (python-markdown missing)")})
+            head = docs_head()
+            if p == "/papi/docs/nav":
+                css = [f"/papi/docs/asset/{c}" for c in ("assets/docs.css",) if os.path.isfile(d.safe(c) or "")]
+                return self.send(200, {"nav": d.nav(), "pages": len(d.pages()), "path": d.rel, "web": web_url(d.rel, tree=True), "css": css, "head": head[:12]})
+            if p == "/papi/docs/page":
+                rel = d.resolve(arg("path"))
+                if not rel:
+                    return self.send(404, {"error": "No such page.", "path": arg("path")})
+                pg = dict(d.render(rel, head))
+                pg["html"] = sanitize_html(pg["html"])
+                hist = git_history(f"{d.rel}/{rel}", 1)
+                return self.send(200, {**pg, "web": web_url(f"{d.rel}/{rel}"), "updated": hist[0] if hist else None})
+            if p == "/papi/docs/raw":
+                rel = d.resolve(arg("path"))
+                if not rel:
+                    return self.send(404, {"error": "No such page."})
+                with open(d.safe(rel), encoding="utf-8") as f:
+                    text = f.read()
+                return self.send(200, {"path": rel, "text": text, "sha": hashlib.sha256(text.encode()).hexdigest()[:16]})
+            if p == "/papi/docs/search":
+                return self.send(200, {"hits": d.search(arg("q"), head)})
+            if p == "/papi/docs/history":
+                rel = d.resolve(arg("path"))
+                return self.send(200, {"history": git_history(f"{d.rel}/{rel}", 50) if rel else []})
+            m = re.fullmatch(r"/papi/docs/asset/(.+)", p)
+            if m:
+                f = d.safe(urllib.parse.unquote(m.group(1)))
+                ext = os.path.splitext(f or "")[1].lower()
+                if not f or not os.path.isfile(f) or ext not in icc_docs.ASSET_TYPES:
+                    return self.send(404, {"error": "no such file"})
+                data = open(f, "rb").read()
+                self.send_response(200)
+                self.send_header("Content-Type", icc_docs.ASSET_TYPES[ext])
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "private, max-age=300")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                if ext == ".svg":
+                    self.send_header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
+                self.end_headers()
+                self.wfile.write(data)
+                return
+        return self.send(404, {"error": "unknown docs endpoint"})
+
+    def docs_save(self, s, b):
+        """create or edit a page: {path, text, sha (of the version the editor started from; empty for new pages)}"""
+        d = docs()
+        rel = str(b.get("path") or "").strip().lstrip("/")
+        if not re.fullmatch(r"[A-Za-z0-9._ /-]{1,200}\.md", rel) or ".." in rel.split("/"):
+            return self.send(400, {"error": "Page path must look like section/page-name.md"})
+        text = str(b.get("text") or "").replace("\r\n", "\n")
+        if len(text) > 1_000_000:
+            return self.send(400, {"error": "Page too large (1 MB max)."})
+        with git_lock:
+            repo_sync(force=True)
+            f = d.safe(rel)
+            if not f:
+                return self.send(400, {"error": "bad path"})
+            old = open(f, encoding="utf-8").read() if os.path.isfile(f) else None
+            if (old is None) != (not b.get("sha")) or (old is not None and hashlib.sha256(old.encode()).hexdigest()[:16] != b.get("sha")):
+                return self.send(409, {"error": "The page changed in Git meanwhile (or already exists) — reload it."})
+            if old == text:
+                return self.send(200, {"ok": True, "path": rel, "unchanged": True})
+            os.makedirs(os.path.dirname(f), exist_ok=True)
+            with open(f, "w", encoding="utf-8") as fh:
+                fh.write(text if text.endswith("\n") else text + "\n")
+            msg = f"docs: {'edit' if old is not None else 'add'} {rel} (by {s['u']} via ICC)"
+            if not commit_push(s, msg, [f"{d.rel}/{rel}"]):
+                _git("reset", "-q", "--hard", f"origin/{BRANCH}", check=False) if REPO else None
+                return self.send(409, {"error": "Someone else pushed at the same time — reload and try again."})
+            audit_note = _git("rev-parse", "--short", "HEAD").strip()
+        return self.send(200, {"ok": True, "path": rel, "commit": audit_note, "url": commit_url(audit_note)})
+
     def do_POST(self):
         p = urlparse(self.path).path
         try:
@@ -1432,6 +1535,8 @@ class H(BaseHTTPRequestHandler):
             s = self.need()
             if not s:
                 return
+            if p == "/papi/docs/page":
+                return self.docs_save(s, self.body(2_100_000))
             b = self.body()
             if p == "/papi/todo":
                 return self.send(200, {"tasks": edit_todo(s, "create", b)})

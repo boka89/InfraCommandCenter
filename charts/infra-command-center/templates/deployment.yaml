@@ -103,8 +103,11 @@ spec:
             - {name: ICC_NOTIFY_SECRET, valueFrom: {secretKeyRef: {name: {{ .Values.ai.notify.existingSecret }}, key: notify-secret}}}
             {{- end }}
             - {name: ICC_METRICS_URL, value: {{ include "icc.metricsUrl" . | quote }}}
-            - {name: ICC_GRAFANA_URL, value: {{ .Values.monitoring.grafanaUrl | quote }}}
+            - {name: ICC_GRAFANA_URL, value: {{ include "icc.grafanaUrl" . | quote }}}
             - {name: ICC_DOCS_URL, value: {{ .Values.docs.url | quote }}}
+            {{- with .Values.docs.dir }}
+            - {name: ICC_DOCS_DIR, value: {{ . | quote }}}
+            {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

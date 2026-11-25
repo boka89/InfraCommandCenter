@@ -10,7 +10,7 @@ LABEL org.opencontainers.image.title="Infra Command Center" \
       org.opencontainers.image.version="${ICC_VERSION}"
 
 RUN apk add --no-cache nginx git openssh-client tini \
- && pip install --no-cache-dir pyyaml==6.0.2 ldap3==2.9.1 \
+ && pip install --no-cache-dir pyyaml==6.0.2 ldap3==2.9.1 markdown==3.11.3 pymdown-extensions==13.1.2 \
  && adduser -D -H -u 10001 -s /sbin/nologin icc \
  && mkdir -p /data /etc/icc && chown icc:icc /data
 
@@ -19,7 +19,7 @@ COPY app/api /app/api
 COPY example/config /app/example/config
 COPY docker /app/docker
 RUN chmod 0755 /app/docker/entrypoint.sh \
- && python3 -m py_compile /app/api/icc_api.py /app/docker/render_nginx.py \
+ && python3 -m py_compile /app/api/icc_api.py /app/api/icc_docs.py /app/docker/render_nginx.py \
  && rm -rf /app/api/__pycache__ /app/docker/__pycache__
 
 ENV ICC_VERSION=${ICC_VERSION} \

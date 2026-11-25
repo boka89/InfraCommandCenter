@@ -85,16 +85,49 @@ monitoring:
   # Bring your own: any Prometheus-compatible query API (Prometheus, VictoriaMetrics, Mimir, Thanos).
   # Leave empty to use the bundled VictoriaMetrics below.
   url: ""
-  grafanaUrl: ""          # allows embedding Grafana public dashboards (CSP frame-src)
+  grafanaUrl: ""          # external Grafana (BYO): embedding of public dashboards (CSP frame-src); auto for the bundled one
   victoriametrics:
     enabled: true
     image: victoriametrics/victoria-metrics:v1.156.0
     retention: 90d
     storage: 10Gi
+    scrapeInterval: 60s
+    externalLabels: {}    # added to every series
     # appended to the generated scrape config (node-exporter, kube-state-metrics, pve-exporter, ...)
     extraScrapeConfigs: []
+    relabelConfig: []     # global relabeling of everything ingested (-relabelConfig), e.g. add a site label
+    # Kubernetes service discovery: a ServiceAccount with read access to nodes/pods/endpoints (cluster-wide),
+    # plus the kubelet and cAdvisor scrape jobs. Needed for kubernetes_sd_configs in extraScrapeConfigs.
+    kubernetes:
+      enabled: false
+      kubeletJobs: true
+    extraArgs: []
     resources:
       requests: {cpu: 50m, memory: 128Mi}
+      limits: {cpu: "1", memory: 1Gi}
+  # Grafana, provisioned with the metrics backend as its default datasource. Served under the ICC host
+  # (path below) so ICC can embed public dashboards same-origin; set `host` for a separate hostname instead.
+  grafana:
+    enabled: false
+    image: grafana/grafana:13.3.1
+    path: /grafana
+    host: ""
+    storage: 5Gi
+    timezone: ""          # TZ of the container, e.g. Europe/Vienna
+    adminSecret: ""       # Secret with GF_SECURITY_ADMIN_USER / GF_SECURITY_ADMIN_PASSWORD; generated when empty
+    datasourceUid: victoria-metrics
+    # LDAP / Active Directory sign-in: a ConfigMap with ldap.toml (+ CA files, mounted at /etc/grafana/ldap)
+    ldap:
+      existingConfigMap: ""
+      bindPasswordSecret: {name: "", key: ""}   # exposed as $__env{LDAP_BIND_PASSWORD}
+      allowSignUp: true
+    dashboards:
+      configMaps: []      # ConfigMaps whose keys are <folder>--<name>.json -> Grafana folder <FOLDER>
+      gnetIds: []         # grafana.com dashboard ids, downloaded at start ($DS_* inputs bound to the datasource)
+      gnetFolder: Community
+    extraEnv: []          # [{name: GF_..., value: ...}]
+    resources:
+      requests: {cpu: 50m, memory: 192Mi}
       limits: {cpu: "1", memory: 1Gi}
   blackbox:
     enabled: true
@@ -103,7 +136,10 @@ monitoring:
     dnsSearches: []
 
 docs:
-  url: ""                 # MkDocs site; its search index is searched on the Docs page
+  # Integrated docs: Markdown pages in the config repo (<config.path>/docs, or `dir`), rendered, searched and
+  # edited on the Docs page. `url` is only for an external MkDocs site when the repo has no docs/.
+  dir: ""
+  url: ""
 
 # ---------------------------------------------------------------- secrets vault (optional)
 # Deploy Vaultwarden for the organisation (or keep using your own vault: then leave this off).
