@@ -1,0 +1,18 @@
+modules:
+  # any answer from a web server counts as "up" (many admin UIs answer 401/403/302)
+  http:
+    prober: http
+    timeout: 8s
+    http:
+      preferred_ip_protocol: ip4
+      follow_redirects: true
+      valid_status_codes: [200, 201, 202, 204, 301, 302, 303, 307, 308, 400, 401, 403, 404, 405]
+      tls_config: {insecure_skip_verify: true}
+  tcp:
+    prober: tcp
+    timeout: 5s
+    tcp: {preferred_ip_protocol: ip4}
+  icmp:
+    prober: icmp
+    timeout: 5s
+    icmp: {preferred_ip_protocol: ip4}

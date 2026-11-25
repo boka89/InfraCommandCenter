@@ -1,0 +1,43 @@
+# =============================================================================
+# ICC instance settings. Part of the configuration repository; every change is a
+# Git commit. Secrets NEVER go here (they live in your vault / Kubernetes Secrets).
+# =============================================================================
+instance:
+  name: ACME Ltd
+  subtitle: Infra Command Center
+
+# The AI operator (Hermes Agent). `instructions` are house rules added to every
+# chat, Planner task run and alarm fix started from ICC.
+assistant:
+  name: Hermes
+  instructions: |
+    - Work through Git: change configuration in this repository, never only on the live system.
+    - Credentials are in the company vault. Never print secrets in chat or commit them.
+    - Every infrastructure change gets a line in changelog.md.
+    - Ask before anything that costs money, deletes data or needs someone on site.
+
+# Links into the tools you already run (all optional).
+links:
+  argocd: ""          # e.g. https://argocd.example.com
+  longhorn: ""        # e.g. https://longhorn.example.com
+  docs: ""            # MkDocs site, e.g. https://docs.example.com/
+
+# Which site cluster-wide metrics (Kubernetes, ArgoCD, Longhorn) belong to when the
+# series carry no `site` label. Defaults to the site of the first node with `k8s:`.
+kubernetes:
+  site: hq
+  description: 3-node K3s cluster on Proxmox, apps delivered by ArgoCD, storage on Longhorn.
+
+# Extra capacity meters on the Overview (Proxmox storage ids from pve-exporter).
+capacity:
+  storage: []
+  #  - {label: "NAS01 (NFS)", id: "storage/pve01/nas01", site: hq}
+
+# MkDocs sections shown on the Docs page (paths relative to links.docs).
+docs:
+  sections: []
+  #  - {name: Network, path: network/}
+
+# Extra files of this repository to show (read-only, with history) under Design › Config.
+configFiles: []
+#  - {name: Helm values, path: platform/monitoring/values.yaml, desc: "Monitoring stack"}

@@ -1,0 +1,146 @@
+# Infra Command Center (ICC) Helm values. Secrets never go in here: reference existing Secrets.
+
+image:
+  repository: ghcr.io/boka89/infracommandcenter
+  tag: ""                 # defaults to the chart appVersion
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# External URL of ICC (used for OIDC redirects and links in notifications)
+publicUrl: ""
+
+# ---------------------------------------------------------------- configuration repository
+# Everything ICC shows comes from a Git repository (icc.yaml, inventory.yaml, structure.yaml,
+# planner.md, changelog.md, settings/). Leave `repo` empty to start with a local repository on the
+# data volume, seeded with the example configuration.
+config:
+  repo: ""                # git@github.com:acme/infra.git  or  https://github.com/acme/infra.git
+  branch: main
+  path: ""                # sub-directory that holds the ICC files
+  gitWeb: ""              # web URL for commit links (auto-derived for GitHub/GitLab/Gitea)
+  commitEmail: icc@localhost
+  agentEmail: ""          # e-mail your AI agent commits with (attribution in Admin activity)
+  # Secret with `git-ssh-key` (deploy key with write access) or `git-token` (HTTPS), optional `known-hosts`
+  existingSecret: ""
+
+# ---------------------------------------------------------------- sign-in
+auth:
+  providers: [local]      # any of: local, ldap, oidc
+  sessionTTL: 43200
+  # Secret with key `session-secret` (otherwise generated and kept on the data volume)
+  sessionSecret: ""
+  local:
+    adminUser: admin
+    adminName: Administrator
+    # Secret with key `admin-password`. Empty: the chart creates one with a random password (see NOTES).
+    existingSecret: ""
+    # Secret with key `users.yaml`: {users: [{login, name, password_hash}]} (hash: icc_api.py hash-password)
+    usersSecret: ""
+  ldap:
+    urls: []              # [ldaps://dc1.example.com, ldaps://dc2.example.com]
+    mode: ad              # ad: bind as user@domain + nested group check | search: service bind + search
+    domain: ""            # AD UPN suffix (mode ad)
+    baseDN: ""
+    groupDN: ""           # members of this group may sign in
+    bindDN: ""            # mode search
+    userFilter: "(uid={user})"
+    nameAttr: displayName
+    tlsNames: []          # expected certificate names when connecting by IP
+    startTLS: false
+    label: Directory account
+    caConfigMap: ""       # ConfigMap with key `ca.pem` (self-signed / private CA)
+    existingSecret: ""    # Secret with key `bind-password` (mode search)
+  oidc:
+    issuer: ""            # https://login.example.com/realms/acme
+    clientId: ""
+    existingSecret: ""    # Secret with key `client-secret`
+    scopes: openid profile email
+    userClaim: preferred_username
+    groupsClaim: groups
+    allowedGroups: []
+    label: Sign in with SSO
+
+# ---------------------------------------------------------------- AI operator (Hermes Agent)
+ai:
+  # Bring your own Hermes: URL of its API server (API_SERVER_ENABLED=true), e.g. http://hermes:8642
+  url: ""
+  existingSecret: ""      # Secret with key `api-key` (the API_SERVER_KEY of Hermes)
+  autoApprove: true       # AI-first: approval prompts of runs started from ICC are answered automatically
+  notify:                 # optional Hermes webhook route (deliver-only) for start/finish notices
+    url: ""
+    existingSecret: ""    # key `notify-secret`
+  # Deploy Hermes Agent next to ICC (EXPERIMENTAL in 0.1 alpha). Needs an LLM provider key.
+  deploy:
+    enabled: false
+    image: nousresearch/hermes-agent:latest
+    # Secret with the provider credentials as environment variables, e.g. OPENROUTER_API_KEY / ANTHROPIC_API_KEY.
+    envSecret: ""
+    storage: 10Gi
+    resources:
+      requests: {cpu: 100m, memory: 512Mi}
+      limits: {cpu: "2", memory: 4Gi}
+
+# ---------------------------------------------------------------- monitoring
+monitoring:
+  # Bring your own: any Prometheus-compatible query API (Prometheus, VictoriaMetrics, Mimir, Thanos).
+  # Leave empty to use the bundled VictoriaMetrics below.
+  url: ""
+  grafanaUrl: ""          # allows embedding Grafana public dashboards (CSP frame-src)
+  victoriametrics:
+    enabled: true
+    image: victoriametrics/victoria-metrics:v1.156.0
+    retention: 90d
+    storage: 10Gi
+    # appended to the generated scrape config (node-exporter, kube-state-metrics, pve-exporter, ...)
+    extraScrapeConfigs: []
+    resources:
+      requests: {cpu: 50m, memory: 128Mi}
+      limits: {cpu: "1", memory: 1Gi}
+  blackbox:
+    enabled: true
+    image: quay.io/prometheus/blackbox-exporter:v0.29.1
+    dnsServers: []        # resolve internal names via your DNS servers
+    dnsSearches: []
+
+docs:
+  url: ""                 # MkDocs site; its search index is searched on the Docs page
+
+# ---------------------------------------------------------------- secrets vault (optional)
+# Deploy Vaultwarden for the organisation (or keep using your own vault: then leave this off).
+vaultwarden:
+  enabled: false
+  image: vaultwarden/server:1.37.5
+  domain: ""              # https://vault.example.com
+  signupsAllowed: false
+  adminTokenSecret: ""    # Secret with key `admin-token` (argon2 PHC string recommended)
+  storage: 2Gi
+  ingress:
+    host: ""
+    tlsSecretName: ""
+
+# ---------------------------------------------------------------- Kubernetes plumbing
+persistence:
+  size: 2Gi
+  storageClass: ""
+  accessMode: ReadWriteOnce
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: ""
+  host: icc.example.com
+  annotations: {}
+  tlsSecretName: ""       # set to enable TLS
+  certManagerIssuer: ""   # ClusterIssuer name: creates a cert-manager Certificate for the host
+
+resources:
+  requests: {cpu: 20m, memory: 96Mi}
+  limits: {cpu: 500m, memory: 384Mi}
+
+extraEnv: []              # [{name: ICC_..., value: ...}]
+nodeSelector: {}
+tolerations: []
+affinity: {}

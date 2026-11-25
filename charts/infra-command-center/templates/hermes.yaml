@@ -1,0 +1,51 @@
+{{- if .Values.ai.deploy.enabled }}
+{{- $full := include "icc.fullname" . -}}
+# EXPERIMENTAL: Hermes Agent next to ICC. Its API server listens on :8642 inside the cluster only.
+# Configure the model provider with ai.deploy.envSecret and `hermes model` (kubectl exec) on first start.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $full }}-hermes
+  labels: {{- include "icc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: hermes
+spec:
+  serviceName: {{ $full }}-hermes
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: hermes}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: hermes}
+    spec:
+      containers:
+        - name: hermes
+          image: {{ .Values.ai.deploy.image }}
+          env:
+            - {name: API_SERVER_ENABLED, value: "true"}
+            - {name: API_SERVER_HOST, value: "0.0.0.0"}
+            - name: API_SERVER_KEY
+              valueFrom: {secretKeyRef: {name: {{ include "icc.hermesSecret" . }}, key: api-key}}
+          {{- with .Values.ai.deploy.envSecret }}
+          envFrom: [{secretRef: {name: {{ . }}}}]
+          {{- end }}
+          ports: [{name: api, containerPort: 8642}]
+          resources: {{- toYaml .Values.ai.deploy.resources | nindent 12 }}
+          volumeMounts: [{name: data, mountPath: /opt/data}]
+  volumeClaimTemplates:
+    - metadata: {name: data}
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.persistence.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources: {requests: {storage: {{ .Values.ai.deploy.storage }}}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $full }}-hermes
+  labels: {{- include "icc.labels" . | nindent 4 }}
+spec:
+  selector: {app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: hermes}
+  ports: [{name: api, port: 8642, targetPort: api}]
+{{- end }}

@@ -1,0 +1,17 @@
+Infra Command Center {{ .Chart.AppVersion }} is installed (alpha).
+
+{{- if .Values.ingress.enabled }}
+Open: http{{ if .Values.ingress.tlsSecretName }}s{{ end }}://{{ .Values.ingress.host }}/
+{{- else }}
+Open:  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "icc.fullname" . }} 8080:{{ .Values.service.port }}
+       then http://127.0.0.1:8080/  (set extraEnv ICC_COOKIE_SECURE=false for plain-HTTP access)
+{{- end }}
+{{- if and (has "local" .Values.auth.providers) (not .Values.auth.local.existingSecret) }}
+
+Sign in as "{{ .Values.auth.local.adminUser }}". Password:
+  kubectl -n {{ .Release.Namespace }} get secret {{ include "icc.fullname" . }}-admin -o jsonpath='{.data.admin-password}' | base64 -d; echo
+{{- end }}
+
+Configuration repository: {{ .Values.config.repo | default "local (example config on the data volume; set config.repo to use your own)" }}
+Metrics: {{ include "icc.metricsUrl" . | default "none" }}
+AI operator: {{ include "icc.hermesUrl" . | default "none (set ai.url to your Hermes Agent API server)" }}

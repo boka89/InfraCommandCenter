@@ -1,0 +1,10 @@
+apiVersion: v2
+name: infra-command-center
+description: Infra Command Center (ICC) — AI-first, Git-backed command center for small-business infrastructure
+type: application
+version: 0.1.0-alpha
+appVersion: "0.1.0-alpha"
+home: https://github.com/boka89/InfraCommandCenter
+sources: [https://github.com/boka89/InfraCommandCenter]
+license: Apache-2.0
+keywords: [infrastructure, homelab, smb, monitoring, gitops, ai, hermes]

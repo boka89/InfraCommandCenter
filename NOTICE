@@ -1,0 +1,14 @@
+Infra Command Center
+Copyright 2026 The Infra Command Center Authors
+
+This product includes software developed as part of the Infra Command Center project,
+licensed under the Apache License, Version 2.0.
+
+Third-party assets bundled in app/web/:
+- Barlow and Barlow Semi Condensed fonts (app/web/fonts/) — Copyright 2017 The Barlow Project Authors,
+  SIL Open Font License 1.1 (app/web/fonts/OFL.txt).
+- Service icons (app/web/icons/, except type-*.svg) — homarr-labs/dashboard-icons, Apache License 2.0.
+  Product names and logos are trademarks of their respective owners.
+
+The AI operator integration targets Hermes Agent by Nous Research (MIT License), which is not
+bundled in the ICC image.

@@ -1,0 +1,40 @@
+# =============================================================================
+# Site structure: Region / country › Site › Building › Floor
+# Nodes attach to a building (`building:`), appliances to a floor
+# (`floor: <building>/<floor>`); without it a node uses its site's first building.
+# `keywords` help ICC tag changelog lines and tasks with the right site.
+# =============================================================================
+regions:
+  - id: eu
+    name: Europe
+
+sites:
+  - id: hq
+    region: eu
+    name: HQ
+    title: Headquarters
+    color: "#4f6fd6"
+    summary: Office LAN, 3-node Proxmox cluster, K3s, NAS.
+    subnets: ["10.10.0.0/24 · Servers", "10.10.10.0/24 · Clients"]
+    keywords: [Proxmox, K3s, Longhorn]
+    buildings:
+      - id: hq-main
+        name: Main office
+        address: 1 Example Street
+        floors:
+          - {id: gf, name: Ground floor}
+          - {id: f1, name: 1st floor}
+
+  - id: branch
+    region: eu
+    name: Branch
+    title: Branch office
+    color: "#2f9e8f"
+    summary: Small office behind a firewall with a site-to-site VPN to HQ.
+    subnets: ["10.20.0.0/24 · LAN"]
+    keywords: [FortiGate]
+    buildings:
+      - id: branch-office
+        name: Branch office
+        floors:
+          - {id: gf, name: Ground floor}

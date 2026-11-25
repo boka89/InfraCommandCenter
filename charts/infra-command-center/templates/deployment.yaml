@@ -1,0 +1,186 @@
+{{- $full := include "icc.fullname" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $full }}
+  labels: {{- include "icc.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate        # the data volume is ReadWriteOnce
+  selector:
+    matchLabels: {{- include "icc.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "icc.selector" . | nindent 8 }}
+      annotations:
+        checksum/values: {{ toJson (pick .Values "config" "auth" "ai" "monitoring" "docs" "extraEnv" "publicUrl") | sha256sum }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: icc
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          ports:
+            - {name: http, containerPort: 8080}
+            - {name: sd, containerPort: 8081}
+          env:
+            - {name: ICC_PUBLIC_URL, value: {{ .Values.publicUrl | quote }}}
+            - {name: ICC_CONFIG_REPO, value: {{ .Values.config.repo | quote }}}
+            - {name: ICC_CONFIG_BRANCH, value: {{ .Values.config.branch | quote }}}
+            - {name: ICC_CONFIG_PATH, value: {{ .Values.config.path | quote }}}
+            - {name: ICC_GIT_WEB, value: {{ .Values.config.gitWeb | quote }}}
+            - {name: ICC_GIT_EMAIL, value: {{ .Values.config.commitEmail | quote }}}
+            - {name: ICC_AGENT_GIT_EMAIL, value: {{ .Values.config.agentEmail | quote }}}
+            {{- with .Values.config.existingSecret }}
+            - {name: ICC_GIT_SSH_KEY, valueFrom: {secretKeyRef: {name: {{ . }}, key: git-ssh-key, optional: true}}}
+            - {name: ICC_GIT_TOKEN, valueFrom: {secretKeyRef: {name: {{ . }}, key: git-token, optional: true}}}
+            - {name: ICC_GIT_KNOWN_HOSTS, valueFrom: {secretKeyRef: {name: {{ . }}, key: known-hosts, optional: true}}}
+            {{- end }}
+            - {name: ICC_AUTH_PROVIDERS, value: {{ join "," .Values.auth.providers | quote }}}
+            - {name: ICC_SESSION_TTL, value: {{ .Values.auth.sessionTTL | quote }}}
+            {{- with .Values.auth.sessionSecret }}
+            - {name: ICC_SESSION_SECRET, valueFrom: {secretKeyRef: {name: {{ . }}, key: session-secret}}}
+            {{- end }}
+            {{- if has "local" .Values.auth.providers }}
+            - {name: ICC_ADMIN_USER, value: {{ .Values.auth.local.adminUser | quote }}}
+            - {name: ICC_ADMIN_NAME, value: {{ .Values.auth.local.adminName | quote }}}
+            - {name: ICC_ADMIN_PASSWORD, valueFrom: {secretKeyRef: {name: {{ include "icc.adminSecret" . }}, key: admin-password}}}
+            {{- end }}
+            {{- if has "ldap" .Values.auth.providers }}
+            {{- with .Values.auth.ldap }}
+            - {name: ICC_LDAP_URLS, value: {{ join " " .urls | quote }}}
+            - {name: ICC_LDAP_MODE, value: {{ .mode | quote }}}
+            - {name: ICC_LDAP_DOMAIN, value: {{ .domain | quote }}}
+            - {name: ICC_LDAP_BASE_DN, value: {{ .baseDN | quote }}}
+            - {name: ICC_LDAP_GROUP_DN, value: {{ .groupDN | quote }}}
+            - {name: ICC_LDAP_BIND_DN, value: {{ .bindDN | quote }}}
+            - {name: ICC_LDAP_USER_FILTER, value: {{ .userFilter | quote }}}
+            - {name: ICC_LDAP_NAME_ATTR, value: {{ .nameAttr | quote }}}
+            - {name: ICC_LDAP_TLS_NAMES, value: {{ join " " .tlsNames | quote }}}
+            - {name: ICC_LDAP_STARTTLS, value: {{ .startTLS | quote }}}
+            - {name: ICC_LDAP_LABEL, value: {{ .label | quote }}}
+            {{- if .caConfigMap }}
+            - {name: ICC_LDAP_CA_FILE, value: /etc/icc/ldap/ca.pem}
+            {{- end }}
+            {{- with .existingSecret }}
+            - {name: ICC_LDAP_BIND_PASSWORD, valueFrom: {secretKeyRef: {name: {{ . }}, key: bind-password}}}
+            {{- end }}
+            {{- end }}
+            {{- end }}
+            {{- if has "oidc" .Values.auth.providers }}
+            {{- with .Values.auth.oidc }}
+            - {name: ICC_OIDC_ISSUER, value: {{ .issuer | quote }}}
+            - {name: ICC_OIDC_CLIENT_ID, value: {{ .clientId | quote }}}
+            - {name: ICC_OIDC_CLIENT_SECRET, valueFrom: {secretKeyRef: {name: {{ .existingSecret }}, key: client-secret}}}
+            - {name: ICC_OIDC_SCOPES, value: {{ .scopes | quote }}}
+            - {name: ICC_OIDC_USER_CLAIM, value: {{ .userClaim | quote }}}
+            - {name: ICC_OIDC_GROUPS_CLAIM, value: {{ .groupsClaim | quote }}}
+            - {name: ICC_OIDC_ALLOWED_GROUPS, value: {{ join "," .allowedGroups | quote }}}
+            - {name: ICC_OIDC_LABEL, value: {{ .label | quote }}}
+            {{- end }}
+            {{- end }}
+            {{- with include "icc.hermesUrl" . }}
+            - {name: ICC_HERMES_URL, value: {{ . | quote }}}
+            - {name: ICC_HERMES_API_KEY, valueFrom: {secretKeyRef: {name: {{ include "icc.hermesSecret" $ }}, key: api-key}}}
+            {{- end }}
+            - {name: ICC_HERMES_AUTO_APPROVE, value: {{ .Values.ai.autoApprove | quote }}}
+            {{- if .Values.ai.notify.url }}
+            - {name: ICC_NOTIFY_URL, value: {{ .Values.ai.notify.url | quote }}}
+            - {name: ICC_NOTIFY_SECRET, valueFrom: {secretKeyRef: {name: {{ .Values.ai.notify.existingSecret }}, key: notify-secret}}}
+            {{- end }}
+            - {name: ICC_METRICS_URL, value: {{ include "icc.metricsUrl" . | quote }}}
+            - {name: ICC_GRAFANA_URL, value: {{ .Values.monitoring.grafanaUrl | quote }}}
+            - {name: ICC_DOCS_URL, value: {{ .Values.docs.url | quote }}}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: tmp, mountPath: /tmp}
+            {{- if .Values.auth.local.usersSecret }}
+            - {name: users, mountPath: /etc/icc/users.yaml, subPath: users.yaml, readOnly: true}
+            {{- end }}
+            {{- if and (has "ldap" .Values.auth.providers) .Values.auth.ldap.caConfigMap }}
+            - {name: ldap-ca, mountPath: /etc/icc/ldap, readOnly: true}
+            {{- end }}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: {{ $full }}-data}
+        - name: tmp
+          emptyDir: {}
+        {{- with .Values.auth.local.usersSecret }}
+        - name: users
+          secret: {secretName: {{ . }}}
+        {{- end }}
+        {{- if and (has "ldap" .Values.auth.providers) .Values.auth.ldap.caConfigMap }}
+        - name: ldap-ca
+          configMap: {name: {{ .Values.auth.ldap.caConfigMap }}}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $full }}-data
+  labels: {{- include "icc.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: [{{ .Values.persistence.accessMode }}]
+  {{- with .Values.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $full }}
+  labels: {{- include "icc.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector: {{- include "icc.selector" . | nindent 4 }}
+  ports:
+    - {name: http, port: {{ .Values.service.port }}, targetPort: http}
+---
+# Internal only: blackbox probe targets (http_sd) for the metrics backend
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $full }}-sd
+  labels: {{- include "icc.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector: {{- include "icc.selector" . | nindent 4 }}
+  ports:
+    - {name: sd, port: 8081, targetPort: sd}

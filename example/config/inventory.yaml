@@ -1,0 +1,95 @@
+# =============================================================================
+# Inventory: every host, guest, device and service. Drives the ICC views AND the
+# blackbox probe targets (served on the internal port at /sd/probes.json).
+#
+# Node fields:
+#   id        unique, lowercase            name   display name
+#   site      site id (structure.yaml)     type   see `types` below
+#   logo      icon file in app/web/icons/ (homarr-labs/dashboard-icons)
+#   parent    node id this runs on         ip / url / os / role / notes
+#   probe     icmp | tcp:<port> | http | none   (http uses `url`)
+#   pve       Proxmox id (node/<NAME>, qemu/<vmid>, lxc/<vmid>) -> live CPU/RAM (pve-exporter)
+#   k8s       Kubernetes node name -> node-exporter / kube-state-metrics
+#   win       windows_exporter hostname label -> CPU/RAM/C:
+#   expect    running (default) | stopped  (stopped guests are not alarms)
+#   building / floor, docs (path on links.docs), inferred: true (not confirmed)
+# Service fields: id, name, site, category, desc, url, logo, runs_on, argocd (app name),
+#   probe (default http when url is set), tls: self-signed (no expiry warning)
+#
+# These are EXAMPLE entries (documentation address ranges). Replace them with yours,
+# or ask the AI in chat to discover your network and fill this file in.
+# =============================================================================
+
+typeOrder: [physical, nas, network, vm, k3s, lxc, container, camera, virtual]
+types:
+  physical: {name: Physical servers, logo: type-physical.svg}
+  nas: {name: NAS, logo: type-nas.svg}
+  network: {name: Network devices, logo: type-network.svg}
+  camera: {name: Cameras, logo: type-camera.svg}
+  vm: {name: Virtual machines, logo: type-vm.svg}
+  k3s: {name: Kubernetes nodes, logo: k3s.svg}
+  lxc: {name: LXC containers, logo: ubuntu-linux.svg}
+  container: {name: Docker containers, logo: docker-blue.svg}
+  virtual: {name: Virtual IPs, logo: type-virtual.svg}
+
+categories:
+  - Infrastructure
+  - Kubernetes & GitOps
+  - Monitoring & Docs
+  - Business apps
+
+nodes:
+  # ---------------- HQ · network ----------------
+  - {id: fw01-hq, logo: ubiquiti-unifi.svg, name: FW01-HQ, site: hq, type: network, role: "Gateway, firewall, S2S VPN", os: UniFi Dream Machine, ip: 10.10.0.1, probe: none, floor: hq-main/gf}
+  - {id: sw01-hq, logo: ubiquiti-unifi.svg, name: SW01-HQ, site: hq, type: network, role: Core PoE switch, os: UniFi Switch 24 PoE, ip: 10.10.0.2, parent: fw01-hq, probe: none, floor: hq-main/gf}
+  - {id: ap01-hq, logo: ubiquiti-unifi.svg, name: AP01-HQ, site: hq, type: network, role: Wi-Fi AP, os: UniFi U7 Pro, ip: 10.10.0.5, parent: sw01-hq, probe: none, floor: hq-main/f1}
+
+  # ---------------- HQ · compute + storage ----------------
+  - {id: pve01-hq, logo: proxmox.svg, name: PVE01-HQ, site: hq, type: physical, role: Proxmox VE node, os: Proxmox VE 9, ip: 10.10.0.11, url: "https://10.10.0.11:8006/", probe: none, pve: node/PVE01-HQ, notes: "16 threads · 64 GiB"}
+  - {id: pve02-hq, logo: proxmox.svg, name: PVE02-HQ, site: hq, type: physical, role: Proxmox VE node, os: Proxmox VE 9, ip: 10.10.0.12, probe: none, pve: node/PVE02-HQ}
+  - {id: pve03-hq, logo: proxmox.svg, name: PVE03-HQ, site: hq, type: physical, role: Proxmox VE node, os: Proxmox VE 9, ip: 10.10.0.13, probe: none, pve: node/PVE03-HQ}
+  - {id: nas01-hq, logo: synology-dsm.svg, name: NAS01-HQ, site: hq, type: nas, role: "File shares, backups", os: Synology DS923+, ip: 10.10.0.20, url: "https://10.10.0.20:5001/", probe: none}
+
+  # ---------------- HQ · guests ----------------
+  - {id: k8s01-hq, logo: k3s.svg, name: K8S01-HQ, site: hq, type: k3s, role: K3s server, os: Ubuntu 24.04, ip: 10.10.0.31, parent: pve01-hq, pve: qemu/131, k8s: k8s01-hq, probe: none}
+  - {id: k8s02-hq, logo: k3s.svg, name: K8S02-HQ, site: hq, type: k3s, role: K3s server, os: Ubuntu 24.04, ip: 10.10.0.32, parent: pve02-hq, pve: qemu/132, k8s: k8s02-hq, probe: none}
+  - {id: k8s03-hq, logo: k3s.svg, name: K8S03-HQ, site: hq, type: k3s, role: K3s server, os: Ubuntu 24.04, ip: 10.10.0.33, parent: pve03-hq, pve: qemu/133, k8s: k8s03-hq, probe: none}
+  - {id: dc01-hq, logo: microsoft-windows.svg, name: DC01-HQ, site: hq, type: vm, role: "AD DS + DNS", os: Windows Server 2025, ip: 10.10.0.10, parent: pve02-hq, pve: qemu/110, win: DC01-HQ, probe: none}
+  - {id: ai01-hq, logo: ubuntu-linux.svg, name: AI01-HQ, site: hq, type: vm, role: Hermes Agent (AI operator), os: Ubuntu 24.04, ip: 10.10.0.40, parent: pve02-hq, pve: qemu/140, probe: none}
+  - {id: old01-hq, logo: type-vm.svg, name: OLD01-HQ, site: hq, type: vm, role: Retired ERP (kept for audit), parent: pve01-hq, pve: qemu/100, expect: stopped, probe: none}
+
+  # ---------------- Branch ----------------
+  - {id: fw01-br, logo: fortinet.svg, name: FW01-BR, site: branch, type: network, role: "Gateway, firewall, S2S VPN", os: FortiGate 40F, ip: 10.20.0.1, probe: none}
+  - {id: docker01-br, logo: docker-blue.svg, name: DOCKER01-BR, site: branch, type: physical, role: Docker host (small apps), os: Ubuntu 24.04 · Intel NUC, ip: 10.20.0.20, parent: fw01-br, probe: none}
+
+services:
+  # ---------------- Infrastructure ----------------
+  - {id: proxmox, logo: proxmox.svg, name: Proxmox VE cluster, site: hq, category: Infrastructure, desc: 3 nodes, url: "https://10.10.0.11:8006/", runs_on: pve01-hq, probe: none}
+  - {id: nas-ui, logo: synology-dsm.svg, name: Synology DSM, site: hq, category: Infrastructure, desc: NAS01-HQ · shares + backups, url: "https://10.10.0.20:5001/", runs_on: nas01-hq, probe: none, tls: self-signed}
+  - {id: fortigate, logo: fortinet.svg, name: FortiGate, site: branch, category: Infrastructure, desc: FW01-BR · gateway + VPN, url: "https://10.20.0.1/", runs_on: fw01-br, probe: none}
+
+  # ---------------- Kubernetes & GitOps ----------------
+  - {id: argocd, logo: argo-cd.svg, name: Argo CD, site: hq, category: "Kubernetes & GitOps", desc: GitOps for the K3s cluster, url: "https://argocd.example.com/", probe: none}
+
+  # ---------------- Monitoring & Docs ----------------
+  - {id: icc, logo: /logo.svg, name: Infra Command Center, site: hq, category: "Monitoring & Docs", desc: This dashboard, probe: none}
+  - {id: config-repo, logo: github.svg, name: Config repository, site: hq, category: "Monitoring & Docs", desc: Git repository behind ICC, url: "https://github.com/", probe: http}
+
+  # ---------------- Business apps (public URLs so the demo shows live probes) ----------------
+  - {id: website, logo: type-network.svg, name: Company website, site: hq, category: Business apps, desc: Public website, url: "https://example.com/"}
+  - {id: wiki, logo: mkdocs.svg, name: Handbook, site: branch, category: Business apps, desc: Staff handbook, url: "https://www.example.org/"}
+
+# Grafana (optional): public (login-free) dashboards embedded in Monitor › Dashboards,
+# links to other dashboards, and per-node deep links ({field} = inventory field).
+# grafana:
+#   url: https://grafana.example.com
+#   public:
+#     - {site: hq, id: compute, title: Compute, uid: hq-compute, token: <public-dashboard-token>, height: 1100}
+#   dashboards:
+#     - {site: hq, uid: proxmox, title: Proxmox, desc: "Nodes, guests, backups"}
+#   nodeLinks: {k8s: "/d/rYdddlPWk?var-node={k8s}", pve: "/d/proxmox", win: "/d/windows"}
+
+# Quick links on the Overview
+links:
+  - {name: ICC on GitHub, url: "https://github.com/boka89/InfraCommandCenter"}
+  - {name: Hermes Agent, url: "https://github.com/NousResearch/hermes-agent"}

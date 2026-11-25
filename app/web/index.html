@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Infra Command Center</title>
+  <link rel="icon" type="image/svg+xml" href="logo.svg">
+  <link rel="apple-touch-icon" href="logo.svg">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <aside class="side">
+    <a class="brand" href="#/">
+      <img class="logo" src="logo.svg" alt="" width="38" height="38">
+      <span><b id="brand-name">ICC</b><small id="brand-sub">Infra Command Center</small></span>
+    </a>
+    <div id="site-sel" class="site-sel"></div>
+    <nav id="nav">
+      <a href="#/" data-r="overview"><i><svg class="ic-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></i>Overview</a>
+      <a href="#/design" data-r="design"><i><svg class="ic-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 8l10 5 10-5-10-5z M2 13l10 5 10-5 M2 18l10 5 10-5"/></svg></i>Design</a>
+      <a href="#/monitor" data-r="monitor"><i><svg class="ic-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></i>Monitor</a>
+      <a href="#/planner" data-r="planner"><i><svg class="ic-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v16H4z M4 9.5h16 M8 3v4 M16 3v4 M9 15l2 2 4-4"/></svg></i>Planner</a>
+      <a href="#/changelog" data-r="changelog"><i><svg class="ic-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11 M9 12h11 M9 18h11 M4.5 6h.01 M4.5 12h.01 M4.5 18h.01"/></svg></i>Changelog</a>
+      <a href="#/docs" data-r="docs"><i><svg class="ic-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H20v15H6.5A1.5 1.5 0 0 0 5 19.5z M5 19.5A1.5 1.5 0 0 0 6.5 21H20"/></svg></i>Docs</a>
+      <a href="#/hermes" data-r="hermes"><i><svg class="ic-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H10l-5 4v-4H4z M8.5 10.5h.01 M12 10.5h.01 M15.5 10.5h.01"/></svg></i>Hermes</a>
+    </nav>
+    <div class="side-foot">
+      <div id="health-mini"></div>
+      <div id="hermes-mini"></div>
+      <small id="updated">loading…</small>
+      <div id="me-mini" class="me-slot"></div>
+    </div>
+  </aside>
+  <main id="app"><div class="loading">Loading inventory…</div></main>
+  <div id="drawer" class="drawer" hidden></div>
+  <script src="app.js"></script>
+  <script src="portal.js"></script>
+  <script src="design.js"></script>
+  <script src="activity.js"></script>
+  <script src="hermes.js"></script>
+</body>
+</html>

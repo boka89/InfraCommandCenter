@@ -1,0 +1,57 @@
+# Infra Command Center — single host (Docker / Podman compose).
+#   cp .env.example .env   # set ICC_ADMIN_PASSWORD at least
+#   docker compose up -d   # then open http://<host>:8080/
+# Optional extras:  docker compose --profile vaultwarden up -d
+name: icc
+
+services:
+  icc:
+    image: ghcr.io/boka89/infracommandcenter:${ICC_TAG:-0.1.0-alpha}
+    restart: unless-stopped
+    ports: ["${ICC_HTTP_PORT:-8080}:8080"]       # web UI. Port 8081 (probe targets) stays internal.
+    env_file: .env
+    environment:
+      ICC_METRICS_URL: ${ICC_METRICS_URL:-http://victoriametrics:8428}
+    volumes:
+      - icc-data:/data
+      # - ./users.yaml:/etc/icc/users.yaml:ro   # more local users (password hashes)
+      # - ./ldap-ca.pem:/etc/icc/ldap-ca.pem:ro # private CA of your directory (ICC_LDAP_CA_FILE)
+
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.156.0
+    restart: unless-stopped
+    command:
+      - -storageDataPath=/storage
+      - -retentionPeriod=90d
+      - -promscrape.config=/etc/vm/scrape.yml
+      - -promscrape.configCheckInterval=30s
+      - -promscrape.httpSDCheckInterval=60s
+    volumes:
+      - vm-data:/storage
+      - ./vm-scrape.yml:/etc/vm/scrape.yml:ro
+
+  blackbox:
+    image: quay.io/prometheus/blackbox-exporter:v0.29.1
+    restart: unless-stopped
+    command: [--config.file=/etc/blackbox/blackbox.yml]
+    cap_add: [NET_RAW]        # ICMP probes
+    user: "0"
+    volumes:
+      - ./blackbox.yml:/etc/blackbox/blackbox.yml:ro
+
+  vaultwarden:
+    profiles: [vaultwarden]
+    image: vaultwarden/server:1.37.5
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${VAULTWARDEN_DOMAIN:-}
+      SIGNUPS_ALLOWED: "false"
+      ADMIN_TOKEN: ${VAULTWARDEN_ADMIN_TOKEN:-}
+    ports: ["${VAULTWARDEN_PORT:-8222}:80"]
+    volumes:
+      - vw-data:/data
+
+volumes:
+  icc-data: {}
+  vm-data: {}
+  vw-data: {}
