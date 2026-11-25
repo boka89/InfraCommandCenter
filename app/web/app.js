@@ -347,7 +347,8 @@ PAGES.overview = () => {
   };
   const meter = (label, v, extra = "") => `<div class="meter"><span>${label}</span><span class="muted">${pct(v)} ${extra}</span>${bar(v)}</div>`;
   const capStore = ((ICC().capacity || {}).storage || []).filter((x) => !x.site || inSiteStrict(x.site));
-  const hostLive = inv.nodes.filter((n) => !(n.pve && n.pve.startsWith("node/")) && ["physical", "nas", "vm"].includes(n.type)).map((n) => [n, nodeLive(n)]).filter(([, l]) => l && l.cpu != null);
+  // hosts outside Proxmox (other hypervisors, bare metal, Windows) that report their own CPU/RAM
+  const hostLive = inv.nodes.filter((n) => !n.pve && ["physical", "nas", "vm"].includes(n.type)).map((n) => [n, nodeLive(n)]).filter(([, l]) => l && l.cpu != null);
   const ovCap = () => (pveNodes.length || capStore.length || hostLive.length ? `    <div class="card">
       <div class="title"><h2>Capacity${S.site !== "all" ? ` · ${esc(siteName(S.site))}` : ""}</h2><a href="#/monitoring">Dashboards</a></div>
       ${pveNodes.length ? meter("Proxmox CPU (avg)", cpu.length ? cpu.reduce((a, b) => a + b, 0) / cpu.length : null) + meter("Proxmox RAM", memM ? memU / memM : null, `· ${gib(memU)} / ${gib(memM)}`) : ""}
