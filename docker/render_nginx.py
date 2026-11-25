@@ -117,7 +117,12 @@ http {{
         location = /healthz {{ auth_request off; access_log off; default_type text/plain; return 200 "ok\\n"; }}
         location ~ ^/(login\\.html|login\\.js|app\\.css|logo\\.svg)$ {{ auth_request off; add_header Cache-Control "no-cache"; }}
         location /fonts/ {{ auth_request off; expires 7d; add_header Cache-Control "public"; }}
-        location /icons/ {{ expires 1h; add_header Cache-Control "public"; }}
+        location /icons/ {{ expires 1h; add_header Cache-Control "public"; try_files $uri @repoicons; }}
+        location @repoicons {{
+            rewrite ^/icons/(.*)$ /papi/icons/$1 break;
+            proxy_pass http://{api};
+            proxy_set_header Cookie $http_cookie;
+        }}
         location / {{
             error_page 401 = /login.html;
             try_files $uri $uri/ /index.html;

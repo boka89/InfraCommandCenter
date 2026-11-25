@@ -31,6 +31,8 @@ ICC has two kinds of configuration:
 | `ICC_GIT_WEB` | derived | Web URL for commit/file links (derived automatically for GitHub, GitLab and Gitea URLs) |
 | `ICC_GIT_EMAIL` | `icc@localhost` | Author e-mail of UI commits (`<Name> via ICC`) |
 | `ICC_AGENT_GIT_EMAIL` | – | E-mail the AI commits with, used to attribute its own commits |
+| `ICC_INVENTORY_FILE`, `ICC_STRUCTURE_FILE`, `ICC_PLANNER_FILE`, `ICC_CHANGELOG_FILE`, `ICC_INSTANCE_FILE` | – | Repo-relative path of one file, when your repository keeps it somewhere else (e.g. an existing `docs/operations/todo.md`) |
+| `ICC_SETTINGS_DIR`, `ICC_ICONS_DIR` | `<path>/settings`, `<path>/icons` | Repo-relative directories for per-user settings and extra icons |
 
 ### Sign-in
 
@@ -70,4 +72,4 @@ The files in [`example/config/`](../example/config) document every field in comm
 
 **changelog.md line**: ``- **Who** — `2026-11-25 10:00:00Z` — summary — [Link](url)``
 
-Icons for `logo:` are files in `app/web/icons/`, taken from [homarr-labs/dashboard-icons](https://github.com/homarr-labs/dashboard-icons). Built-in type icons are `type-*.svg`.
+Icons for `logo:` are files in `app/web/icons/` or in the repository's `icons/` directory (served when the image has no icon of that name), taken from [homarr-labs/dashboard-icons](https://github.com/homarr-labs/dashboard-icons). Built-in type icons are `type-*.svg`.

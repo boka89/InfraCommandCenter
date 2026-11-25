@@ -100,6 +100,8 @@ def main():
         check("activity attribution", st == 200 and any(s.startswith("planner: remove") for s in subj) and all(c["via"] in ("portal", "git") for c in d["changes"]), subj)
         log = subprocess.run(["git", "-C", os.path.join(data, "repo"), "log", "--format=%an|%s"], capture_output=True, text=True).stdout
         check("commits authored as '<name> via ICC'", "Administrator via ICC|planner: add" in log, log)
+        check("missing repo icon -> 404", call(op, "GET", "/papi/icons/nope.svg")[0] == 404)
+        check("icon path traversal refused", call(op, "GET", "/papi/icons/..%2Ficc.yaml")[0] == 404)
         st, d, _ = call(op, "GET", "/papi/hermes/health")
         check("no agent -> health false", st == 200 and d["ok"] is False)
         # OIDC: /papi/oidc/login -> mock /authorize -> /papi/oidc/callback -> session cookie

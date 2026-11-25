@@ -99,9 +99,29 @@ def log(*a):
     print(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), *a, flush=True)
 
 
+# per-file overrides (repo-relative paths) for repositories that keep these files elsewhere
+FILE_OVERRIDES = {"icc.yaml": E("ICC_INSTANCE_FILE", ""), "inventory.yaml": E("ICC_INVENTORY_FILE", ""), "structure.yaml": E("ICC_STRUCTURE_FILE", ""),
+                  "planner.md": E("ICC_PLANNER_FILE", ""), "changelog.md": E("ICC_CHANGELOG_FILE", "")}
+SETTINGS_DIR = E("ICC_SETTINGS_DIR", "").strip("/")
+ICONS_DIR = E("ICC_ICONS_DIR", "").strip("/")   # extra service icons in the config repo (default: <config path>/icons)
+ICON_TYPES = {".svg": "image/svg+xml", ".png": "image/png", ".webp": "image/webp", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".ico": "image/x-icon"}
+
+
 def rp(name):
     """repo-relative path of a config file"""
+    if FILE_OVERRIDES.get(name):
+        return FILE_OVERRIDES[name].strip("/")
+    if SETTINGS_DIR and (name == "settings" or name.startswith("settings/")):
+        return SETTINGS_DIR + name[len("settings"):]
     return f"{CPATH}/{name}" if CPATH else name
+
+
+def resolve_link(href, rel_to):
+    """relative Markdown link in a repo file -> web URL of the target (absolute links unchanged)"""
+    if not href or re.match(r"^[a-z]+:", href) or href.startswith("#"):
+        return href
+    path = os.path.normpath(os.path.join(os.path.dirname(rp(rel_to)), href.split("#")[0])).lstrip("./")
+    return web_url(path) + (("#" + href.split("#", 1)[1]) if "#" in href else "") if git_web() else href
 
 
 def fp(name):
@@ -497,7 +517,7 @@ def read_changelog():
         lm = re.search(r"\s*[—–-]\s*\[(?:Link|Details|More)\]\(([^)\s]+)\)\s*$", summary)
         if lm:
             href, summary = lm.group(1), summary[:lm.start()].strip()
-        out.append({"author": m.group(1), "ts": m.group(2), "summary": summary, "href": href})
+        out.append({"author": m.group(1), "ts": m.group(2), "summary": summary, "href": resolve_link(href, "changelog.md") if href else None})
     return out
 
 
@@ -1235,6 +1255,20 @@ class H(BaseHTTPRequestHandler):
             s = self.sess()
             if not s:
                 return self.send(401, {"error": "Sign in first."})
+            m = re.fullmatch(r"/papi/icons/([A-Za-z0-9._-]{1,100})", p)
+            if m and os.path.splitext(m.group(1))[1].lower() in ICON_TYPES:  # icons from the config repo (nginx falls back here)
+                f = os.path.join(REPO_DIR, ICONS_DIR or rp("icons"), m.group(1))
+                if not os.path.isfile(f):
+                    return self.send(404, {"error": "no such icon"})
+                data = open(f, "rb").read()
+                self.send_response(200)
+                self.send_header("Content-Type", ICON_TYPES[os.path.splitext(f)[1].lower()])
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "private, max-age=3600")
+                self.send_header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
+                self.end_headers()
+                self.wfile.write(data)
+                return
             if p == "/papi/inventory.json":
                 with git_lock:
                     repo_sync()

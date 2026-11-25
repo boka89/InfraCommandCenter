@@ -202,11 +202,12 @@ const byProbe = (key, id) => mv(key, (m) => m.probe_id === id);
 const byNode = (key, n) => mv(key, (m) => m.node === n);
 
 /* links in changelog/planner Markdown: relative ones point into the docs site (if any) or the config repo */
-function relLink(href) {
-  if (/^https?:\/\//.test(href)) return href;
+function relLink(href, base = "planner.md") {
+  if (/^[a-z]+:/i.test(href) || href.startsWith("#")) return href;
+  const R = ICC().repo || {}, f = repoFile(base).path || "";
+  if (R.web) { const u = new URL(href, `https://x/${f.includes("/") ? f.slice(0, f.lastIndexOf("/") + 1) : ""}`); return `${R.web}/blob/${R.branch}${u.pathname}${u.hash}`; }
   if (DOCS) return DOCS + href.replace(/^\.?\//, "").replace(/\.md(#|$)/, "/$1");
-  const w = (ICC().repo || {}).web, b = (ICC().repo || {}).branch, base = (ICC().repo || {}).path;
-  return w ? `${w}/blob/${b}/${base ? base + "/" : ""}${href.replace(/^\.?\//, "")}` : "#";
+  return "#";
 }
 async function loadDocs() {
   const parse = (html) => new DOMParser().parseFromString(html, "text/html");
@@ -226,7 +227,7 @@ async function loadDocs() {
     ICC().features && ICC().features.docsSearch ? fetch("/api/docs/search/search_index.json").then((r) => r.json()) : Promise.reject("no docs"),
   ]);
   if (cl.status === "fulfilled") {
-    S.changelog = cl.value.entries.map((e) => ({ ...e, summary: (window.md ? md(e.summary) : esc(e.summary)), href: e.href ? (/^https?:/.test(e.href) ? e.href : relLink(e.href)) : null }))
+    S.changelog = cl.value.entries.map((e) => ({ ...e, summary: (window.md ? md(e.summary, "changelog.md") : esc(e.summary)), href: e.href ? relLink(e.href, "changelog.md") : null }))
       .filter((e) => /^\d{4}-\d\d-\d\d/.test(e.ts));
   }
   if (si.status === "fulfilled") S.docs = si.value.docs.filter((d) => !d.location.includes("#") || d.title);

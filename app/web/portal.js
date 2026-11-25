@@ -16,12 +16,12 @@ async function papi(method, path, body) {
 }
 
 /* ---------- tiny markdown (inline only, safe) ---------- */
-function mdLink(href) { return relLink(href); }
-function md(s) {
+function mdLink(href, base) { return relLink(href, base); }
+function md(s, base = "planner.md") {
   let h = esc(s || "");
   h = h.replace(/`([^`]+)`/g, "<code>$1</code>");
   h = h.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
-  h = h.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, t, u) => `<a href="${esc(mdLink(u.replace(/&amp;/g, "&")))}" target="_blank" rel="noopener">${t}</a>`);
+  h = h.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, t, u) => `<a href="${esc(mdLink(u.replace(/&amp;/g, "&"), base))}" target="_blank" rel="noopener">${t}</a>`);
   return h;
 }
 function mdBlock(s) { // multi-line output from Hermes: paragraphs, lists, code fences
