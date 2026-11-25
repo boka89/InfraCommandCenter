@@ -19,13 +19,13 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- .Values.auth.local.existingSecret | default (printf "%s-admin" (include "icc.fullname" .)) -}}
 {{- end }}
 
-{{/* metrics URL ICC queries: BYO first, else the bundled VictoriaMetrics */}}
+{{/* metrics URL ICC queries: BYO first, else the bundled VictoriaMetrics (FQDN: nginx's resolver ignores search domains) */}}
 {{- define "icc.metricsUrl" -}}
-{{- if .Values.monitoring.url -}}{{ .Values.monitoring.url }}{{- else if .Values.monitoring.victoriametrics.enabled -}}http://{{ include "icc.fullname" . }}-vm:8428{{- end -}}
+{{- if .Values.monitoring.url -}}{{ .Values.monitoring.url }}{{- else if .Values.monitoring.victoriametrics.enabled -}}http://{{ include "icc.fullname" . }}-vm.{{ .Release.Namespace }}.svc.cluster.local:8428{{- end -}}
 {{- end }}
 
 {{- define "icc.hermesUrl" -}}
-{{- if .Values.ai.url -}}{{ .Values.ai.url }}{{- else if .Values.ai.deploy.enabled -}}http://{{ include "icc.fullname" . }}-hermes:8642{{- end -}}
+{{- if .Values.ai.url -}}{{ .Values.ai.url }}{{- else if .Values.ai.deploy.enabled -}}http://{{ include "icc.fullname" . }}-hermes.{{ .Release.Namespace }}.svc.cluster.local:8642{{- end -}}
 {{- end }}
 
 {{- define "icc.hermesSecret" -}}
