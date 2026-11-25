@@ -6,7 +6,7 @@ name: icc
 
 services:
   icc:
-    image: ghcr.io/boka89/infracommandcenter:${ICC_TAG:-0.1.0-alpha}
+    image: ghcr.io/boka89/infracommandcenter:${ICC_TAG:-0.2.0-alpha}
     restart: unless-stopped
     ports: ["${ICC_HTTP_PORT:-8080}:8080"]       # web UI. Port 8081 (probe targets) stays internal.
     env_file: .env

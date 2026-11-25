@@ -4,9 +4,9 @@ const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset
 const $id = (x) => document.getElementById(x);
 fetch("/papi/me", { credentials: "same-origin" }).then((r) => r.json()).then((m) => { if (m.user) location.replace("/"); }).catch(() => {});
 fetch("/papi/auth/methods").then((r) => r.json()).then((m) => {
-  $id("l-name").textContent = m.name || "Infra Command Center";
-  document.title = `Sign in · ${m.name || "Infra Command Center"}`;
-  $id("l-ver").textContent = `Infra Command Center ${m.version || ""}`;
+  $id("l-name").textContent = m.name || "";
+  document.title = `Sign in · ${m.name ? `${m.name} · ` : ""}InfraCommandCenter`;
+  $id("l-ver").textContent = `InfraCommandCenter ${m.version || ""}`;
   if (m.oidc) { $id("sso").hidden = false; $id("sso-btn").textContent = m.oidc; $id("sso-btn").onclick = () => { location.href = "/papi/oidc/login"; }; }
   if (m.password) {
     $id("login").hidden = false;

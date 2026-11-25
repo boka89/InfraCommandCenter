@@ -21,7 +21,7 @@ import yaml
 
 import icc_docs
 
-VERSION = os.environ.get("ICC_VERSION", "0.1.0-alpha")
+VERSION = os.environ.get("ICC_VERSION", "0.2.0-alpha")
 E = os.environ.get
 
 
@@ -1030,7 +1030,7 @@ ALARM_PROMPT = """[ICC Alarms — "Check & fix with {agent}", requested by {name
 An alarm is active in ICC. Investigate it and fix it.
 
 Alarm: {title}
-Level: {level} · Site: {site} · Kind: {kind}
+Priority: {level} · Site: {site} · Kind: {kind}
 Reason shown in ICC: {why}
 Inventory entry: {entry}
 
@@ -1668,7 +1668,7 @@ class H(BaseHTTPRequestHandler):
                     repo_sync()
                     entry = alarm_entry(a["kind"], a["id"])
                     ctx = repo_context(s["n"], s["u"])
-                levels = ["0 no warning", "1 be aware", "2 be prepared", "3 take action"]
+                levels = ["no priority (informational)", "P3 low: plan a fix", "P2 high: act today", "P1 critical: outage, act now"]
                 prompt = ALARM_PROMPT.format(agent=assistant_name(), name=s["n"], user=s["u"], title=a["title"], level=levels[a["level"]], site=a["site"] or "—",
                                              kind=a["kind"] or "other", why=a["why"] or "—", entry=entry, context=ctx)
                 j = start_job("alarm", s, f"Alarm: {a['title']}", prompt, alarm=a)

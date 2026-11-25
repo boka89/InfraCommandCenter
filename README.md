@@ -38,7 +38,7 @@ open http://localhost:8080/   # sign in as admin
 ### Kubernetes (Helm)
 
 ```bash
-helm install icc oci://ghcr.io/boka89/charts/infra-command-center --version 0.1.0-alpha \
+helm install icc oci://ghcr.io/boka89/charts/infra-command-center --version 0.2.0-alpha \
   -n icc --create-namespace \
   --set ingress.enabled=true --set ingress.host=icc.example.com
 kubectl -n icc get secret icc-admin -o jsonpath='{.data.admin-password}' | base64 -d; echo

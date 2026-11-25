@@ -75,9 +75,11 @@ for page-specific styles. Relative `.md` links open inside ICC; links from the c
 
 The files in [`example/config/`](../example/config) document every field in comments. Short reference:
 
-**inventory.yaml node**: `id`, `name`, `site`, `type`, `logo`, `ip`, `url`, `os`, `role`, `parent`, `notes`, `probe` (`icmp` | `tcp:<port>` | `http` | `none`), `pve` (`node/NAME`, `qemu/ID`, `lxc/ID`), `k8s` (node name), `win` (windows_exporter hostname), `expect: stopped`, `building`, `floor: <bld>/<floor>`, `docs`, `inferred: true`.
+**inventory.yaml node**: `id`, `name`, `site`, `type`, `logo`, `ip`, `url`, `os`, `role`, `parent`, `notes`, `probe` (`icmp` | `tcp:<port>` | `http` | `none`), `pve` (`node/NAME`, `qemu/ID`, `lxc/ID`), `k8s` (node name), `win` (windows_exporter hostname), `expect: stopped`, `building`, `floor: <bld>/<floor>`, `docs`, `inferred: true`, `priority`.
 
-**inventory.yaml service**: `id`, `name`, `site`, `category`, `desc`, `url`, `logo`, `runs_on`, `argocd` (application name), `probe` (default `http` when `url` is set), `tls: self-signed`.
+**inventory.yaml service**: `id`, `name`, `site`, `category`, `desc`, `url`, `logo`, `runs_on`, `argocd` (application name), `probe` (default `http` when `url` is set), `tls: self-signed`, `priority`.
+
+**Incident priority** (`priority: P1 | P2 | P3 | none` on a node or service): alarms are classified like network-operations incidents. P1 critical = outage, act now · P2 high = act today · P3 low = plan a fix · `none` = informational, no badge. Without a setting: down = P2, degraded = P3, every node of a Proxmox or Kubernetes cluster down = P1, one cluster node down = P2 (redundancy lost), TLS expiring within 7 days = P2. A `priority` applies when the item is down; degraded is one step lower. Mark the things your business cannot work without as `P1`.
 
 **planner.md task**: ``- [ ] `P1` `next` `due:2026-12-31` `owner:Jane` **Title** — details``. All tags are optional. Status is one of `backlog` (default), `next`, `doing`, `waiting`, or ticked for done. Tasks without an owner belong to the AI operator.
 

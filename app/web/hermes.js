@@ -72,7 +72,7 @@ function sideHtml() {
 
 /* ---------------- main pane ---------------- */
 function downBanner() {
-  return S.hHealth && !S.hHealth.ok ? `<div class="banner bad">${lvlChip(3, "")}<span><b>${esc(AGENT())} is not reachable</b> (${esc(S.hHealth.error || "no answer")}). ICC talks to the Hermes Agent API server (ICC_HERMES_URL); messages can't be sent until it answers. See docs/ai-hermes.md.</span></div>` : "";
+  return S.hHealth && !S.hHealth.ok ? `<div class="banner bad">${dot("down")}<span><b>${esc(AGENT())} is not reachable</b> (${esc(S.hHealth.error || "no answer")}). ICC talks to the Hermes Agent API server (ICC_HERMES_URL); messages can't be sent until it answers. See docs/ai-hermes.md.</span></div>` : "";
 }
 function composer(ph) {
   const busy = hxR().c && S.hx.chat && S.hx.chat.messages && S.hx.chat.messages.length && ["queued", "running"].includes(S.hx.chat.messages[S.hx.chat.messages.length - 1].status);

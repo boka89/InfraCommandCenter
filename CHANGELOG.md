@@ -2,7 +2,12 @@
 
 All notable changes to ICC. The format follows [Keep a Changelog](https://keepachangelog.com/) and versions follow [SemVer](https://semver.org/) (pre-1.0: minor versions may break).
 
-## [Unreleased]
+## [0.2.0-alpha] — 2026-11-25
+
+### Changed
+- Alarms are classified as incidents with network-operations priorities instead of warning levels 0–3: **P1** critical (outage, act now), **P2** high (act today), **P3** low (plan a fix), or no priority (informational, no badge). Defaults: down = P2, degraded = P3, a whole Proxmox/Kubernetes cluster down = P1, one cluster node down = P2 (redundancy lost), TLS < 7 days = P2. Override per inventory item with `priority: P1 | P2 | P3 | none`. The header shows "All OK" when nothing needs action.
+- Branding: the **InfraCommandCenter** wordmark with the company name (`icc.yaml` instance name) under it, in the sidebar, on the sign-in page and in the browser title.
+- Scope switcher and overview tiles list buildings only when a site has more than one, and floors only when a building has more than one.
 
 ### Added
 - Integrated docs: Markdown pages in the config repo (`docs/`), page tree (`nav.yml`), full-text search, Mermaid diagrams, admonitions/tabs/task lists, icon shortcodes, per-instance `docs.css`; edit and create pages in the browser (each save is a commit, stale edits are refused).

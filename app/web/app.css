@@ -66,8 +66,12 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .side { width: 232px; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 16px 10px; position: fixed; top: 0; left: 0; bottom: 0; overflow-y: auto; z-index: 10; }
 .brand { display: flex; gap: 10px; align-items: center; color: var(--fg); padding: 2px 8px 16px; }
 .brand:hover { text-decoration: none; }
-.brand b { font-weight: 700; letter-spacing: -.01em; }
-.brand small { display: block; color: var(--faint); font-size: 12px; }
+.brand > span { min-width: 0; }
+.wordmark { display: block; font: 400 17px/1.15 var(--font); letter-spacing: -.015em; white-space: nowrap; color: var(--fg); }
+.wordmark b { font-weight: 750; color: var(--accent); }
+.brand small { display: block; margin-top: 3px; color: var(--muted); font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.login-hero .wordmark { font-size: 22px; }
+.login-hero .company { margin: 4px 0 0; font-weight: 600; color: var(--muted); }
 .logo { width: 34px; height: 34px; display: block; flex: none; }
 .hero .hero-logo { display: none; }
 nav a { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: var(--r-sm); color: var(--muted); font-weight: 500; margin-bottom: 1px; transition: background-color .15s var(--ease), color .15s var(--ease); }
@@ -121,7 +125,8 @@ h3 { font: 600 12px/1.3 var(--cond); margin: 0 0 8px; color: var(--muted); text-
 
 /* ---------- warning levels (signature) ---------- */
 .lvl { display: inline-flex; align-items: center; gap: 6px; font: 600 12px/1 var(--cond); letter-spacing: .03em; white-space: nowrap; color: var(--muted); }
-.lvl i { font-style: normal; width: 18px; height: 18px; border-radius: 4px; display: grid; place-items: center; font: 700 11px/1 var(--font); color: #10161c; }
+.lvl i { font-style: normal; min-width: 22px; height: 18px; padding: 0 4px; border-radius: 4px; display: grid; place-items: center; font: 700 11px/1 var(--font); color: #10161c; }
+.lvl.l0 { color: var(--l0-ink, var(--muted)); }
 .lvl.l0 i { background: var(--l0); } .lvl.l1 i { background: var(--l1); } .lvl.l2 i { background: var(--l2); } .lvl.l3 i { background: var(--l3); color: #fff; }
 .lvl.l1 { color: var(--l1-ink); } .lvl.l2 { color: var(--l2-ink); } .lvl.l3 { color: var(--l3-ink); }
 .wmap { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; margin-bottom: 14px; }
@@ -136,7 +141,8 @@ h3 { font: 600 12px/1.3 var(--cond); margin: 0 0 8px; color: var(--muted); text-
 .wtile .wt-nums b { color: var(--fg); font-weight: 600; }
 .wtile .wt-blds { display: flex; flex-wrap: wrap; gap: 4px; }
 .wtile .wt-blds .lvl { padding: 3px 7px 3px 3px; border: 1px solid var(--border); border-radius: 99px; background: var(--surface); }
-.wtile .wt-blds .lvl i { width: 14px; height: 14px; font-size: 9.5px; border-radius: 99px; }
+.wtile .wt-blds .lvl i { min-width: 18px; height: 14px; font-size: 9px; border-radius: 99px; padding: 0 3px; }
+.wtile .wt-blds .lvl.l0 { padding: 3px 9px; }
 .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex: none; }
 
 /* ---------- pills & dots (status = colour + shape) ---------- */

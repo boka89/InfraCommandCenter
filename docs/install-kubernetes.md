@@ -3,7 +3,7 @@
 Requirements: Kubernetes 1.27+, a default StorageClass (or set `persistence.storageClass`), and an ingress controller for external access.
 
 ```bash
-helm install icc oci://ghcr.io/boka89/charts/infra-command-center --version 0.1.0-alpha \
+helm install icc oci://ghcr.io/boka89/charts/infra-command-center --version 0.2.0-alpha \
   -n icc --create-namespace -f my-values.yaml
 ```
 

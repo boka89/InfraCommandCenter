@@ -55,15 +55,23 @@ const ICON_PATHS = {
   done: "M5 12.5l4.5 4.5L19 7",
 };
 const icon = (n, cls = "") => `<svg class="ic-svg ${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICON_PATHS[n] || ""}"/></svg>`;
-/* ---- warning levels: 0 no warning · 1 be aware · 2 be prepared · 3 take action ---- */
-const LVL = ["No warning", "Be aware", "Be prepared", "Take action"];
-function levelOf(al) {
-  if (al.some((a) => a.s === "down")) return 3;
-  if (al.some((a) => a.s === "warn" && (a.kind === "node" || a.kind === "svc"))) return 2;
-  return al.length ? 1 : 0;
+/* ---- incident priority (network-operations style) ----
+ * rank 3 = P1 critical (act now) · 2 = P2 high (act today) · 1 = P3 low (plan a fix) · 0 = no priority (informational).
+ * Defaults: something down -> P2, degraded -> P3; a cluster/role group fully down -> P1. Inventory items can set
+ * `priority: P1 | P2 | P3 | none` (applies when down; degraded is one step lower). */
+const INC = ["No priority", "P3 · Low", "P2 · High", "P1 · Critical"];
+const PNAME = ["", "P3", "P2", "P1"];
+const prioRank = (p) => ({ p1: 3, p2: 2, p3: 1, none: 0 }[String(p || "").toLowerCase()]);
+function alertLevel(a) {
+  if (a.rank != null) return a.rank;
+  const item = a.kind === "node" ? S.invAll.nodes.find((n) => n.id === a.id) : a.kind === "svc" ? S.invAll.services.find((x) => x.id === a.id) : null;
+  const o = item ? prioRank(item.priority) : undefined;
+  if (o !== undefined) return a.s === "down" ? o : Math.max(0, o - 1);
+  return a.s === "down" ? 2 : 1;
 }
-const alertLevel = (a) => (a.s === "down" ? 3 : a.kind === "node" || a.kind === "svc" ? 2 : 1);
-const lvlChip = (l, label = LVL[l]) => `<span class="lvl l${l}" title="Level ${l} · ${LVL[l]}"><i>${l}</i>${label ? esc(label) : ""}</span>`;
+const levelOf = (al) => al.reduce((m, a) => Math.max(m, alertLevel(a)), 0);
+const incidents = (al) => al.filter((a) => alertLevel(a) > 0);
+const lvlChip = (l, label = INC[l]) => l > 0 ? `<span class="lvl l${l}" title="${INC[l]}"><i>${PNAME[l]}</i>${label ? esc(label.replace(/^P\d · /, "")) : ""}</span>` : (label ? `<span class="lvl l0" title="No incident">${esc(label)}</span>` : "");
 
 /* user settings (sidebar → user → Settings): theme + time zone */
 S_TZ = localStorage.getItem("tz") || Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -212,6 +220,11 @@ const byNode = (key, n) => mv(key, (m) => m.node === n);
 function relLink(href, base = "planner.md") {
   if (/^[a-z]+:/i.test(href) || href.startsWith("#")) return href;
   const R = ICC().repo || {}, f = repoFile(base).path || "", Dd = ICC().docs || {};
+  const blob = R.web && Dd.integrated && Dd.path ? `${R.web}/blob/${R.branch}/${Dd.path}/` : null;
+  if (blob && href.startsWith(blob) && /\.md(#|$)/.test(href)) { // API already resolved it to the Git web URL
+    const [p, h] = href.slice(blob.length).split("#");
+    return `#/docs?p=${encodeURIComponent(decodeURIComponent(p)).replace(/%2F/g, "/")}${h ? `&a=${encodeURIComponent(h)}` : ""}`;
+  }
   if (Dd.integrated && Dd.path) { // a page of the integrated docs -> open it inside ICC
     const u = new URL(href, `https://x/${f.includes("/") ? f.slice(0, f.lastIndexOf("/") + 1) : ""}`), rp = decodeURIComponent(u.pathname.slice(1));
     if (rp.startsWith(Dd.path + "/") && /\.md$/.test(rp)) return `#/docs?p=${encodeURIComponent(rp.slice(Dd.path.length + 1)).replace(/%2F/g, "/")}${u.hash ? `&a=${encodeURIComponent(u.hash.slice(1))}` : ""}`;
@@ -303,12 +316,29 @@ const dot = (s, title = "") => `<span class="dot ${s}" title="${esc(title || s)}
 function alerts() {
   const out = [];
   for (const n of S.inv.nodes) { const st = nodeStatus(n); if (st.s === "down" || st.s === "warn") out.push({ s: st.s, name: n.name, site: n.site, why: st.why.join(", "), id: n.id, kind: "node" }); }
-  for (const x of S.inv.services) { const st = svcStatus(x); if (st.s === "down" || st.s === "warn") out.push({ s: st.s, name: x.name, site: x.site, why: st.why.join(", "), id: x.id, kind: "svc" }); }
-  for (const v of S.m.lh || []) if (v.v >= 2) out.push({ s: v.v === 3 ? "down" : "warn", name: `Longhorn ${v.metric.pvc || v.metric.volume}`, site: v.metric.site || k8sSite(), why: v.v === 3 ? "faulted" : "degraded" });
-  for (const p of S.m.podsBad || []) out.push({ s: "warn", name: `Pod ${p.metric.namespace}/${p.metric.pod}`, site: p.metric.site || k8sSite(), why: "not running" });
-  for (const g of drift().unknown) out.push({ s: "warn", name: g.name, site: g.site, why: `Proxmox ${g.id} not in inventory` });
+  for (const x of S.inv.services) {
+    const st = svcStatus(x); if (st.s !== "down" && st.s !== "warn") continue;
+    const tls = byProbe("probeTls", x.id), a = { s: st.s, name: x.name, site: x.site, why: st.why.join(", "), id: x.id, kind: "svc" };
+    if (st.s === "warn" && tls != null && tls < 7 * 86400 && x.tls !== "self-signed" && prioRank(x.priority) === undefined) a.rank = 2;
+    out.push(a);
+  }
+  for (const v of S.m.lh || []) if (v.v >= 2) out.push({ s: v.v === 3 ? "down" : "warn", rank: v.v === 3 ? 2 : 1, name: `Longhorn ${v.metric.pvc || v.metric.volume}`, site: v.metric.site || k8sSite(), why: v.v === 3 ? "faulted" : "degraded (redundancy lost)" });
+  for (const p of S.m.podsBad || []) out.push({ s: "warn", rank: 1, name: `Pod ${p.metric.namespace}/${p.metric.pod}`, site: p.metric.site || k8sSite(), why: "not running" });
+  for (const g of drift().unknown) out.push({ s: "warn", rank: 1, name: g.name, site: g.site, why: `Proxmox ${g.id} not in inventory` });
+  // a whole group down (all Proxmox nodes, all Kubernetes nodes, every node of one type at a site) is a P1 outage
+  const groups = {};
+  for (const n of S.inv.nodes) {
+    if (n.expect === "stopped") continue;
+    const g = n.pve && n.pve.startsWith("node/") ? "Proxmox cluster" : n.k8s ? "Kubernetes cluster" : null;
+    if (g) (groups[`${n.site}|${g}`] = groups[`${n.site}|${g}`] || { site: n.site, name: g, all: [], down: [] }).all.push(n);
+  }
+  for (const g of Object.values(groups)) {
+    g.down = g.all.filter((n) => nodeStatus(n).s === "down");
+    if (g.all.length > 1 && g.down.length === g.all.length) out.push({ s: "down", rank: 3, name: g.name, site: g.site, why: `all ${g.all.length} nodes down` });
+    else if (g.all.length > 1 && g.down.length) for (const a of out) if (a.kind === "node" && g.down.some((n) => n.id === a.id) && a.rank == null && prioRank((g.down.find((n) => n.id === a.id) || {}).priority) === undefined) { a.rank = 2; a.why += " · redundancy lost"; }
+  }
   for (const a of out) a.key = `${a.kind || "other"}:${a.id || a.name}`;
-  return out.filter((x) => inSiteStrict(x.site)).sort((a, b) => alertLevel(b) - alertLevel(a));
+  return out.filter((x) => inSiteStrict(x.site)).sort((a, b) => alertLevel(b) - alertLevel(a) || (a.s === "down" ? -1 : 1) - (b.s === "down" ? -1 : 1));
 }
 function drift() {
   const known = new Set((S.invAll || S.inv).nodes.map((n) => n.pve).filter(Boolean));
@@ -345,12 +375,12 @@ PAGES.overview = () => {
     const a = counts(ns, nodeStatus), b = counts(ss, svcStatus);
     const sal = al.filter((x) => x.site === s.id), lv = levelOf(sal);
     const worst = [...sal].sort((x, y) => alertLevel(y) - alertLevel(x))[0];
-    const blds = (s.buildings || []).map((bd) => {
+    const blds = ((s.buildings || []).length > 1 ? s.buildings : []).map((bd) => {
       const bal = sal.filter((x) => { const n = x.id && S.invAll.nodes.find((m) => m.id === x.id); const sv = x.kind === "svc" && S.invAll.services.find((m) => m.id === x.id); return n ? nodeBld(n) === bd.id : sv ? svcBld(sv) === bd.id : false; });
       return `<button class="ghost sm" data-sk="building" data-sid="${esc(bd.id)}" title="Show only ${esc(bd.name)}">${lvlChip(levelOf(bal), bd.name)}</button>`;
     }).join("");
     return `<div class="wtile l${lv}">
-      <div class="wt-head"><span class="swatch" style="background:${esc(s.color)}"></span><b>${esc(s.name)}</b><span class="faint">${esc(s.title)}</span><span class="sp"></span>${lvlChip(lv)}</div>
+      <div class="wt-head"><span class="swatch" style="background:${esc(s.color)}"></span><b>${esc(s.name)}</b><span class="faint">${esc(s.title)}</span><span class="sp"></span>${lvlChip(lv) || '<span class="lvl l0">All OK</span>'}</div>
       <div class="wt-why">${worst ? `${esc(worst.name)} — ${esc(worst.why)}${sal.length > 1 ? ` <span class="faint">+${sal.length - 1} more</span>` : ""}` : esc(s.summary)}</div>
       <div class="wt-nums"><span><b>${a.up}</b>/${ns.length} nodes up</span><span><b>${b.up}</b>/${ss.length} services up</span>${a.stopped ? `<span><b>${a.stopped}</b> stopped</span>` : ""}<span class="sp"></span><a href="#/inventory?site=${s.id}">Inventory</a><a href="#/services?site=${s.id}">Services</a></div>
       ${(s.buildings || []).length ? `<div class="wt-blds">${blds}</div>` : ""}
@@ -398,7 +428,7 @@ PAGES.overview = () => {
 ${ovCap()}${ovK8s()}
     <div class="card">
       <div class="title"><h2>Recent changes</h2><a href="#/changelog">All</a></div>
-      ${S.changelog ? `<ul class="list">${S.changelog.slice(0, 5).map((e) => `<li><span class="when">${esc(e.ts.slice(0, 10))}</span><div>${trim(e.summary, 170)} ${e.href ? `<a href="${esc(e.href)}" target="_blank" rel="noopener" aria-label="Details">${icon("external", "xs")}</a>` : ""}</div></li>`).join("")}</ul>` : '<div class="faint">loading…</div>'}
+      ${S.changelog ? `<ul class="list">${S.changelog.slice(0, 5).map((e) => `<li><span class="when">${esc(e.ts.slice(0, 10))}</span><div>${trim(e.summary, 170)} ${e.href ? (e.href.startsWith("#/") ? `<a href="${esc(e.href)}" aria-label="Details">${icon("docs", "xs")}</a>` : `<a href="${esc(e.href)}" target="_blank" rel="noopener" aria-label="Details">${icon("external", "xs")}</a>`) : ""}</div></li>`).join("")}</ul>` : '<div class="faint">loading…</div>'}
     </div>
     <div class="card">
       <div class="title"><h2>Planner · top priorities</h2><a href="#/planner">Planner</a></div>
@@ -633,7 +663,7 @@ PAGES.changelog = () => {
   return `${(() => { const all = S.changelog || []; const now = Date.now(); const ago = (d) => all.filter(inSiteAny).filter((e) => now - Date.parse(e.ts.replace(" ", "T")) < d * 86400000).length;
   const allS = all.filter(inSiteAny); return hero("Changelog", `Every infrastructure change, newest first — from ${repoLink("changelog.md")} in Git.`, [[allS.length, "changes"], [ago(1), "last 24 h"], [ago(7), "last 7 days"], [allS[0] ? allS[0].ts.slice(0, 10) : "—", "latest"], [new Set(allS.map((e) => e.author)).size, "authors"]]); })()}
   <div class="filters"><input type="search" id="q" placeholder="Filter changes…" value="${esc(S.f.q)}"><span class="sp"></span><span class="faint">${items.length} entries</span></div>
-  <div class="card"><ul class="tl">${items.map((e) => { const dt = new Date(e.ts.replace(" ", "T")); const day = dayKey(dt); const h = day !== lastDay ? `<li class="day">${esc(dt.toLocaleDateString(undefined, { timeZone: S_TZ, weekday: "short", year: "numeric", month: "short", day: "numeric" }))}</li>` : ""; lastDay = day; return `${h}<li><div class="meta">${esc(fmtTime(dt))} · ${esc(e.author)} ${siteTags(e)}</div><div>${e.summary}</div>${e.href ? `<a href="${esc(e.href)}" target="_blank" rel="noopener">Details${icon("external", "xs")}</a>` : ""}</li>`; }).join("") || '<li class="faint">${S.changelog ? "No changes recorded yet. Add lines to changelog.md (or ask the AI to do it with every change)." : "loading…"}</li>'}</ul></div>`;
+  <div class="card"><ul class="tl">${items.map((e) => { const dt = new Date(e.ts.replace(" ", "T")); const day = dayKey(dt); const h = day !== lastDay ? `<li class="day">${esc(dt.toLocaleDateString(undefined, { timeZone: S_TZ, weekday: "short", year: "numeric", month: "short", day: "numeric" }))}</li>` : ""; lastDay = day; return `${h}<li><div class="meta">${esc(fmtTime(dt))} · ${esc(e.author)} ${siteTags(e)}</div><div>${e.summary}</div>${e.href ? (e.href.startsWith("#/") ? `<a href="${esc(e.href)}">Details</a>` : `<a href="${esc(e.href)}" target="_blank" rel="noopener">Details${icon("external", "xs")}</a>`) : ""}</li>`; }).join("") || '<li class="faint">${S.changelog ? "No changes recorded yet. Add lines to changelog.md (or ask the AI to do it with every change)." : "loading…"}</li>'}</ul></div>`;
 };
 
 /* ---------------- drawer ---------------- */
@@ -681,15 +711,21 @@ async function openNode(id) {
 function openAttention() {
   const al = alerts(), dr = $("#drawer");
   dr.innerHTML = `<button class="x" aria-label="Close">×</button>
-    <h1 style="margin:0 0 4px">Alarms</h1><p class="lead">${al.length ? `${al.length} active alarm${al.length === 1 ? "" : "s"}.` : "No active alarms — everything monitored is healthy."}</p>
-    ${al.length ? `<ul class="list">${al.map((a) => `<li>${dot(a.s)}<div style="flex:1"><div class="row"><b ${a.kind === "node" ? `data-node="${esc(a.id)}" style="cursor:pointer"` : ""}>${esc(a.name)}</b>${sitePill(a.site)}<span class="sp"></span>${lvlChip(alertLevel(a))}${alarmAction(a)}</div><div class="muted">${esc(a.why)}</div>${a.kind === "svc" ? (() => { const x = S.inv.services.find((s) => s.id === a.id); return x && x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.url)} ${icon("external")}</a>` : ""; })() : ""}</div></li>`).join("")}</ul>` : `<div class="alert-ok">${dot("up")} All good.</div>`}
+    <h1 style="margin:0 0 4px">Alarms</h1><p class="lead">${incSummary(al)}</p>
+    ${al.length ? `<ul class="list">${al.map((a) => `<li>${dot(a.s)}<div style="flex:1"><div class="row"><b ${a.kind === "node" ? `data-node="${esc(a.id)}" style="cursor:pointer"` : ""}>${esc(a.name)}</b>${sitePill(a.site)}<span class="sp"></span>${lvlChip(alertLevel(a)) || '<span class="faint" style="font-size:12px">no priority</span>'}${alarmAction(a)}</div><div class="muted">${esc(a.why)}</div>${a.kind === "svc" ? (() => { const x = S.inv.services.find((s) => s.id === a.id); return x && x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.url)} ${icon("external")}</a>` : ""; })() : ""}</div></li>`).join("")}</ul>` : `<div class="alert-ok">${dot("up")} All OK.</div>`}
     <p class="faint" style="margin-top:18px;font-size:12px">Sources: blackbox probes, Proxmox, Kubernetes, ArgoCD, Longhorn, windows_exporter. Updated ${S.updated ? fmtTime(S.updated) : "—"}.</p>`;
   dr.hidden = false;
 }
+const incSummary = (al) => {
+  const inc = incidents(al), info = al.length - inc.length;
+  if (!al.length) return "No incidents — everything monitored is healthy.";
+  return `${inc.length ? `${inc.length} open incident${inc.length === 1 ? "" : "s"}, highest ${INC[levelOf(al)]}.` : "No incidents."}${info ? ` ${info} notice${info === 1 ? "" : "s"} without priority.` : ""}`;
+};
 PAGES.alarms = () => {
-  const al = alerts();
-  return `${hero("Alarms", `Everything monitored that is down or degraded right now, worst first. Current level: ${LVL[levelOf(al)].toLowerCase()}.`, [[levelOf(al), "warning level"], [al.length, "active"], [al.filter((a) => alertLevel(a) === 3).length, "take action"], [al.filter((a) => alertLevel(a) === 2).length, "be prepared"], [al.filter((a) => alertLevel(a) === 1).length, "be aware"]])}
-  <div class="card">${al.length ? `<ul class="list">${al.map((a) => `<li>${dot(a.s)}<div style="flex:1"><div class="row"><b ${a.kind === "node" ? `data-node="${esc(a.id)}" style="cursor:pointer"` : ""}>${esc(a.name)}</b>${sitePill(a.site)}<span class="sp"></span>${lvlChip(alertLevel(a))}${alarmAction(a)}</div><div class="muted">${esc(a.why)}</div></div></li>`).join("")}</ul>` : '<div class="empty">No active alarms — everything monitored is healthy.</div>'}</div>`;
+  const al = alerts(), lv = levelOf(al), n = (r) => al.filter((a) => alertLevel(a) === r).length;
+  return `${hero("Alarms", `Everything monitored that is down or degraded right now, highest priority first. ${incSummary(al)}`, [[lv ? PNAME[lv] : "—", "highest priority"], [n(3), "P1 critical"], [n(2), "P2 high"], [n(1), "P3 low"], [n(0), "no priority"]])}
+  <div class="card">${al.length ? `<ul class="list">${al.map((a) => `<li>${dot(a.s)}<div style="flex:1"><div class="row"><b ${a.kind === "node" ? `data-node="${esc(a.id)}" style="cursor:pointer"` : ""}>${esc(a.name)}</b>${sitePill(a.site)}<span class="sp"></span>${lvlChip(alertLevel(a)) || '<span class="faint" style="font-size:12px">no priority</span>'}${alarmAction(a)}</div><div class="muted">${esc(a.why)}</div></div></li>`).join("")}</ul>` : '<div class="empty">No incidents — everything monitored is healthy.</div>'}
+  <p class="faint" style="margin:12px 0 0;font-size:12px">P1 critical: act now (outage) · P2 high: act today (something down, redundancy lost) · P3 low: plan a fix (degraded). Set <code>priority: P1 | P2 | P3 | none</code> on an inventory item to override.</p></div>`;
 };
 const _invRaw = PAGES.inventory;
 PAGES.topology = (p) => { S.f.view = "tree"; return _invRaw(p); };
@@ -730,9 +766,11 @@ function openScope() {
     h += item("region", r.id, r.name, 0, cnt((n) => rs.some((s) => s.id === n.site)));
     for (const s of rs) {
       h += item("site", s.id, s.name, 1, cnt((n) => n.site === s.id), s.title);
-      for (const b of s.buildings || []) {
-        h += item("building", b.id, b.name, 2, cnt((n) => n.site === s.id && nodeBld(n) === b.id));
-        for (const f of b.floors || []) h += item("floor", `${b.id}/${f.id}`, f.name, 3, cnt((n) => n.floor === `${b.id}/${f.id}`));
+      // simpler view: a single building / single floor adds nothing to pick from, so it is not listed
+      const bs = s.buildings || [], multiB = bs.length > 1;
+      for (const b of bs) {
+        if (multiB) h += item("building", b.id, b.name, 2, cnt((n) => n.site === s.id && nodeBld(n) === b.id));
+        if ((b.floors || []).length > 1) for (const f of b.floors) h += item("floor", `${b.id}/${f.id}`, f.name, multiB ? 3 : 2, cnt((n) => n.floor === `${b.id}/${f.id}`));
       }
     }
   }
@@ -769,7 +807,8 @@ function render(keepFocus = false) {
   $("#app").innerHTML = PAGES[r.name](r.params);
   if (focus !== null) { const q = $("#q"); if (q) { q.focus(); q.setSelectionRange(focus, focus); } }
   const al = alerts();
-  { const lv = levelOf(al); $("#health-mini").innerHTML = `<button class="ghost health-btn" id="attn" title="Show alarms">${lvlChip(lv, "")}<span>${al.length ? `${al.length} alarm${al.length === 1 ? "" : "s"} · ${LVL[lv]}` : "No alarms"}</span><span class="sp"></span>${icon("bell")}</button>`; }
+  { const lv = levelOf(al), inc = incidents(al).length;
+    $("#health-mini").innerHTML = `<button class="ghost health-btn" id="attn" title="Show alarms">${lv ? lvlChip(lv, "") : dot("up")}<span>${inc ? `${inc} incident${inc === 1 ? "" : "s"} · ${INC[lv].replace(/^P\d · /, "")}` : al.length ? `All OK · ${al.length} notice${al.length === 1 ? "" : "s"}` : "All OK"}</span><span class="sp"></span>${icon("bell")}</button>`; }
   $("#updated").textContent = S.updated ? `Updated ${fmtTime(S.updated)}${S.m.failed ? ` · ${S.m.failed} queries failed` : ""}` : "";
   if (r.name === "docs" && window.ICCDocs) window.ICCDocs.afterRender();
 }
@@ -807,8 +846,8 @@ async function boot() {
     S.invAll = await r.json(); S.f.site = S.site; scopeInv();
     DOCS = ((ICC().docs || {}).url || "").replace(/\/?$/, "/"); if (DOCS === "/") DOCS = "";
     const inst = ICC().instance || {};
-    document.title = `${inst.name || "ICC"} · Infra Command Center`;
-    const bn = $("#brand-name"), bs = $("#brand-sub"); if (bn) bn.textContent = inst.name || "ICC"; if (bs) bs.textContent = inst.subtitle || "Infra Command Center";
+    document.title = inst.name ? `${inst.name} · InfraCommandCenter` : "InfraCommandCenter";
+    const bs = $("#brand-sub"); if (bs) { bs.textContent = inst.name || ""; bs.title = inst.subtitle || inst.name || ""; }
     if (!(ICC().features || {}).hermes) document.body.classList.add("no-agent");
   }
   catch (e) { $("#app").innerHTML = `<div class="card">Could not load the inventory: ${esc(e.message)}</div>`; return; }

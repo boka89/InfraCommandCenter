@@ -4,6 +4,7 @@
 #
 # Node fields:
 #   id        unique, lowercase            name   display name
+#   priority  P1 | P2 | P3 | none: incident priority when down (default P2; degraded = one step lower)
 #   site      site id (structure.yaml)     type   see `types` below
 #   logo      icon file in app/web/icons/ (homarr-labs/dashboard-icons)
 #   parent    node id this runs on         ip / url / os / role / notes
@@ -40,7 +41,7 @@ categories:
 
 nodes:
   # ---------------- HQ · network ----------------
-  - {id: fw01-hq, logo: ubiquiti-unifi.svg, name: FW01-HQ, site: hq, type: network, role: "Gateway, firewall, S2S VPN", os: UniFi Dream Machine, ip: 10.10.0.1, probe: none, floor: hq-main/gf}
+  - {id: fw01-hq, logo: ubiquiti-unifi.svg, name: FW01-HQ, site: hq, type: network, role: "Gateway, firewall, S2S VPN", os: UniFi Dream Machine, ip: 10.10.0.1, probe: none, priority: P1, floor: hq-main/gf}
   - {id: sw01-hq, logo: ubiquiti-unifi.svg, name: SW01-HQ, site: hq, type: network, role: Core PoE switch, os: UniFi Switch 24 PoE, ip: 10.10.0.2, parent: fw01-hq, probe: none, floor: hq-main/gf}
   - {id: ap01-hq, logo: ubiquiti-unifi.svg, name: AP01-HQ, site: hq, type: network, role: Wi-Fi AP, os: UniFi U7 Pro, ip: 10.10.0.5, parent: sw01-hq, probe: none, floor: hq-main/f1}
 
@@ -76,8 +77,8 @@ services:
   - {id: config-repo, logo: github.svg, name: Config repository, site: hq, category: "Monitoring & Docs", desc: Git repository behind ICC, url: "https://github.com/", probe: http}
 
   # ---------------- Business apps (public URLs so the demo shows live probes) ----------------
-  - {id: website, logo: type-network.svg, name: Company website, site: hq, category: Business apps, desc: Public website, url: "https://example.com/"}
-  - {id: wiki, logo: mkdocs.svg, name: Handbook, site: branch, category: Business apps, desc: Staff handbook, url: "https://www.example.org/"}
+  - {id: website, logo: type-network.svg, name: Company website, site: hq, category: Business apps, desc: Public website, url: "https://example.com/", priority: P1}
+  - {id: wiki, logo: mkdocs.svg, name: Handbook, site: branch, category: Business apps, desc: Staff handbook, url: "https://www.example.org/", priority: none}
 
 # Grafana (optional): public (login-free) dashboards embedded in Monitor › Dashboards,
 # links to other dashboards, and per-node deep links ({field} = inventory field).

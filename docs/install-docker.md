@@ -22,5 +22,5 @@ Open `http://<host>:8080/` and sign in as `admin`. The stack is ICC, VictoriaMet
 docker run -d --name icc -p 8080:8080 -v icc-data:/data \
   -e ICC_ADMIN_USER=admin -e ICC_ADMIN_PASSWORD=change-me -e ICC_COOKIE_SECURE=false \
   -e ICC_METRICS_URL=http://prometheus.lan:9090 \
-  ghcr.io/boka89/infracommandcenter:0.1.0-alpha
+  ghcr.io/boka89/infracommandcenter:0.2.0-alpha
 ```

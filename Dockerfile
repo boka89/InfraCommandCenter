@@ -2,7 +2,7 @@
 # Infra Command Center (ICC) — one small image: static web UI (nginx) + Python API.
 FROM python:3.13-alpine
 
-ARG ICC_VERSION=0.1.0-alpha
+ARG ICC_VERSION=0.2.0-alpha
 LABEL org.opencontainers.image.title="Infra Command Center" \
       org.opencontainers.image.description="AI-first, Git-backed command center for small-business infrastructure (bring your own servers, network, Kubernetes)" \
       org.opencontainers.image.source="https://github.com/boka89/InfraCommandCenter" \
