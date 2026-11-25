@@ -16,6 +16,8 @@ spec:
       annotations:
         checksum/values: {{ toJson (pick .Values "config" "auth" "ai" "monitoring" "docs" "extraEnv" "publicUrl") | sha256sum }}
     spec:
+      # Kubernetes would inject ICC_PORT=tcp://... etc. for a Service named "icc": keep the ICC_* namespace clean
+      enableServiceLinks: false
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets: {{- toYaml . | nindent 8 }}
       {{- end }}

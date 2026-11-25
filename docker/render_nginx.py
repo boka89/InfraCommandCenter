@@ -37,9 +37,15 @@ def upstream(url):
 metrics = E("ICC_METRICS_URL", "").strip()
 docs = E("ICC_DOCS_URL", "").strip()
 frames = " ".join(x for x in ["'self'", origin(E("ICC_GRAFANA_URL", ""))] + E("ICC_FRAME_SRC", "").split() if x)
-port = int(E("ICC_PORT", "8080"))
-sd_port = int(E("ICC_SD_PORT", "8081"))
-api = f"127.0.0.1:{int(E('ICC_API_PORT', '8090'))}"
+def num(name, default):
+    """port from env; ignores Docker/Kubernetes link variables such as ICC_PORT=tcp://10.0.0.1:80"""
+    v = E(name, "")
+    return int(v) if v.isdigit() else default
+
+
+port = num("ICC_PORT", 8080)
+sd_port = num("ICC_SD_PORT", 8081)
+api = f"127.0.0.1:{num('ICC_API_PORT', 8090)}"
 
 metrics_block = '    location /api/vm/ { default_type application/json; return 503 \'{"error":"no metrics backend configured (ICC_METRICS_URL)"}\'; }\n'
 if metrics:

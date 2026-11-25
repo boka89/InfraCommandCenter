@@ -28,7 +28,7 @@ def flag(name, default=False):
     return default if v is None or v == "" else v.strip().lower() in ("1", "true", "yes", "on")
 
 
-PORT = int(E("ICC_API_PORT", "8090"))
+PORT = int(E("ICC_API_PORT", "8090")) if E("ICC_API_PORT", "8090").isdigit() else 8090
 DATA = E("ICC_DATA_DIR", "/data")
 PUBLIC_URL = E("ICC_PUBLIC_URL", "").rstrip("/")
 SESSION_SECRET = (E("ICC_SESSION_SECRET") or "").encode()
